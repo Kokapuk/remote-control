@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useShallow } from 'zustand/shallow';
 import ConnectedActionBar from '../components/ConnectedActionBar';
-import MessageForm from '../components/MessageForm';
+import TouchPad from '../components/TouchPad';
 
 export default function Controls() {
   const { socket, setSocket, setHostname } = useSocketStore(
@@ -42,8 +42,8 @@ export default function Controls() {
 
   return (
     <>
-      <MessageForm />
       <ConnectedActionBar />
+      <TouchPad />
     </>
   );
 }

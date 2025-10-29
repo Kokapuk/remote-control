@@ -50,7 +50,8 @@ export default function ConnectionForm() {
   };
 
   return (
-    <Card.Root as="form" maxW="sm" marginInline="auto" onSubmit={handleSubmit as never}>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    <Card.Root as="form" maxW="sm" marginInline="auto" onSubmit={handleSubmit as any}>
       <Card.Header>
         <Card.Title>Connection</Card.Title>
       </Card.Header>
