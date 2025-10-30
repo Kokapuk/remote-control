@@ -33,16 +33,20 @@ async def handler(websocket):
             data = json.loads(message)
 
             match data['type']:
-                case 'move':
-                    mouse.move(data['x'], data['y'])
-                case 'scroll':
-                    mouse.scroll(data['x'], data['y'])
                 case 'leftClick':
                     mouse.click(Button.left)
                 case 'rightClick':
                     mouse.click(Button.right)
                 case 'middleClick':
                     mouse.click(Button.middle)
+                case 'move':
+                    mouse.move(data['x'], data['y'])
+                case 'scroll':
+                    mouse.scroll(data['x'], data['y'])
+                case 'leftPress':
+                    mouse.press(Button.left)
+                case 'leftRelease':
+                    mouse.release(Button.left)
 
     except Exception as e:
         print(f"Connection error: {e}")

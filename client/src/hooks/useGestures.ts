@@ -1,37 +1,54 @@
+import debounce from 'lodash/debounce';
 import { useRef } from 'react';
 
 const START_DELAY = 50;
+const DRAG_DELAY = 300;
 
 const useGestures = ({
-  onMove,
-  onScroll,
   onLeftClick,
   onRightClick,
   onMiddleClick,
+  onMove,
+  onScroll,
+  onLeftPress,
+  onLeftRelease,
 }: {
-  onMove(x: number, y: number): void;
-  onScroll(x: number, y: number): void;
   onLeftClick(): void;
   onRightClick(): void;
   onMiddleClick(): void;
+  onMove(x: number, y: number): void;
+  onScroll(x: number, y: number): void;
+  onLeftPress(): void;
+  onLeftRelease(): void;
 }) => {
   const startTouches = useRef<React.Touch[]>(null);
   const prevTouches = useRef<React.Touch[]>(null);
   const started = useRef(false);
-  const startTimeout = useRef<number>(null);
   const isPanGesture = useRef(false);
+  const isDragGesture = useRef(false);
+
+  const startTimeout = useRef(
+    debounce(() => {
+      started.current = true;
+    }, START_DELAY)
+  );
+
+  const dragTimeout = useRef(
+    debounce(() => {
+      isDragGesture.current = true;
+      onLeftPress();
+      navigator.vibrate(30);
+    }, DRAG_DELAY)
+  );
 
   const reset = () => {
     startTouches.current = null;
     prevTouches.current = null;
     started.current = false;
-
-    if (startTimeout.current) {
-      clearTimeout(startTimeout.current);
-    }
-
-    startTimeout.current = null;
+    startTimeout.current.cancel();
     isPanGesture.current = false;
+    isDragGesture.current = false;
+    dragTimeout.current.cancel();
   };
 
   return {
@@ -39,24 +56,27 @@ const useGestures = ({
       startTouches.current = Array.from(event.touches);
       prevTouches.current = startTouches.current;
 
-      if (startTimeout.current) {
-        clearTimeout(startTimeout.current);
-      }
-
-      startTimeout.current = setTimeout(() => (started.current = true), START_DELAY);
+      startTimeout.current();
+      dragTimeout.current();
     },
 
     onTouchMove: (event: React.TouchEvent<HTMLDivElement>) => {
-      if (!prevTouches.current || !started.current) {
+      if (!started.current) {
         return;
       }
 
-      isPanGesture.current = true;
+      dragTimeout.current.cancel();
 
-      const movementX = event.touches[0].screenX - prevTouches.current[0].screenX;
-      const movementY = event.touches[0].screenY - prevTouches.current[0].screenY;
+      if (!isPanGesture.current) {
+        isPanGesture.current = true;
 
-      switch (prevTouches.current?.length) {
+        prevTouches.current = Array.from(event.touches);
+      }
+
+      const movementX = event.touches[0].screenX - prevTouches.current![0].screenX;
+      const movementY = event.touches[0].screenY - prevTouches.current![0].screenY;
+
+      switch (prevTouches.current!.length) {
         case 1:
           onMove(movementX, movementY);
           break;
@@ -81,6 +101,10 @@ const useGestures = ({
             onMiddleClick();
             break;
         }
+      }
+
+      if (isDragGesture.current) {
+        onLeftRelease();
       }
 
       reset();

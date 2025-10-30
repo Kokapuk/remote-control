@@ -15,12 +15,6 @@ export default function TouchPad(props: TouchPadProps) {
   );
 
   const bind = useGestures({
-    onMove(x, y) {
-      socket?.send(JSON.stringify({ type: 'move', x: x * moveSensitivity, y: y * moveSensitivity }));
-    },
-    onScroll(x, y) {
-      socket?.send(JSON.stringify({ type: 'scroll', x: x * scrollSensitivity, y: y * scrollSensitivity }));
-    },
     onLeftClick() {
       socket?.send(JSON.stringify({ type: 'leftClick' }));
     },
@@ -29,6 +23,18 @@ export default function TouchPad(props: TouchPadProps) {
     },
     onMiddleClick() {
       socket?.send(JSON.stringify({ type: 'middleClick' }));
+    },
+    onMove(x, y) {
+      socket?.send(JSON.stringify({ type: 'move', x: x * moveSensitivity, y: y * moveSensitivity }));
+    },
+    onScroll(x, y) {
+      socket?.send(JSON.stringify({ type: 'scroll', x: x * scrollSensitivity, y: y * scrollSensitivity }));
+    },
+    onLeftPress() {
+      socket?.send(JSON.stringify({ type: 'leftPress' }));
+    },
+    onLeftRelease() {
+      socket?.send(JSON.stringify({ type: 'leftRelease' }));
     },
   });
 
