@@ -56,7 +56,7 @@ export default function ConnectionForm() {
         <Card.Title>Connection</Card.Title>
       </Card.Header>
       <Card.Body>
-        <Stack gap="4" w="full">
+        <Stack gap="4">
           <Field.Root>
             <Field.Label>IP</Field.Label>
             <Input

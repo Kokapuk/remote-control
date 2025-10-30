@@ -85,6 +85,7 @@ const useGestures = ({
 
       reset();
     },
+
     onTouchCancel: reset,
   };
 };

@@ -42,8 +42,8 @@ export default function Controls() {
 
   return (
     <>
+      <TouchPad position="absolute" inset="0" />
       <ConnectedActionBar />
-      <TouchPad />
     </>
   );
 }

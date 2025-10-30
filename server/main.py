@@ -1,8 +1,13 @@
 import asyncio
 import websockets
 import socket
+import json
+from pynput.mouse import Button, Controller
+
 
 PORT = 8765
+
+mouse = Controller()
 
 
 def get_local_ip():
@@ -25,7 +30,20 @@ async def handler(websocket):
         await websocket.send(socket.gethostname())
 
         async for message in websocket:
-            print(f"[MESSAGE]: {message}")
+            data = json.loads(message)
+
+            match data['type']:
+                case 'move':
+                    mouse.move(data['x'], data['y'])
+                case 'scroll':
+                    mouse.scroll(data['x'], data['y'])
+                case 'leftClick':
+                    mouse.click(Button.left)
+                case 'rightClick':
+                    mouse.click(Button.right)
+                case 'middleClick':
+                    mouse.click(Button.middle)
+
     except Exception as e:
         print(f"Connection error: {e}")
     finally:

@@ -5,6 +5,7 @@ import RootLayout from './layout/RootLayout';
 
 const Connection = lazy(() => import('./routes/Connection'));
 const Controls = lazy(() => import('./routes/Controls'));
+const Settings = lazy(() => import('./routes/Settings'));
 
 const router = createBrowserRouter([
   {
@@ -17,6 +18,10 @@ const router = createBrowserRouter([
       {
         path: '/controls',
         element: <Controls />,
+      },
+      {
+        path: '/settings',
+        element: <Settings />,
       },
     ],
   },

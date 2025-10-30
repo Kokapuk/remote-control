@@ -1,6 +1,8 @@
-import { ActionBar, CloseButton, Portal, Text } from '@chakra-ui/react';
+import { ActionBar, CloseButton, IconButton, Portal, Text } from '@chakra-ui/react';
 import useSocketStore from '@stores/socket';
 import { Tooltip } from '@ui/tooltip';
+import { HiAdjustmentsHorizontal } from 'react-icons/hi2';
+import { Link } from 'react-router';
 import { useShallow } from 'zustand/shallow';
 
 export default function ConnectedActionBar() {
@@ -21,8 +23,20 @@ export default function ConnectedActionBar() {
       <Portal>
         <ActionBar.Positioner>
           <ActionBar.Content>
-            <Text>{hostname}</Text>
+            <Text fontSize="xs">{hostname}</Text>
+
             <ActionBar.Separator />
+
+            <Link to="/settings">
+              <Tooltip content="Settings">
+                <IconButton variant="subtle" size="sm">
+                  <HiAdjustmentsHorizontal />
+                </IconButton>
+              </Tooltip>
+            </Link>
+
+            <ActionBar.Separator />
+
             <Tooltip content="Disconnect">
               <ActionBar.CloseTrigger asChild>
                 <CloseButton size="sm" />
