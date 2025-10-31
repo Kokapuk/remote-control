@@ -1,17 +1,23 @@
+import useSettingsStore from '@/stores/settings';
+import useSocketStore from '@/stores/socket';
+import getAcceleratedCoords from '@/utils/getAcceleratedCoords';
 import { Box, type BoxProps } from '@chakra-ui/react';
-import useSocketStore from '@stores/socket';
 import { type RefAttributes } from 'react';
-import useGestures from '../hooks/useGestures';
-import useSettingsStore from '@stores/settings';
 import { useShallow } from 'zustand/shallow';
+import useGestures from '../hooks/useGestures';
 
 export type TouchPadProps = BoxProps & RefAttributes<HTMLDivElement>;
 
 export default function TouchPad(props: TouchPadProps) {
   const socket = useSocketStore((s) => s.socket);
 
-  const { moveSensitivity, scrollSensitivity } = useSettingsStore(
-    useShallow((s) => ({ moveSensitivity: s.moveSensitivity, scrollSensitivity: s.scrollSensitivity }))
+  const { moveSensitivity, scrollSensitivity, accelerationThreshold, maxAccelerationFactor } = useSettingsStore(
+    useShallow((s) => ({
+      moveSensitivity: s.moveSensitivity,
+      scrollSensitivity: s.scrollSensitivity,
+      accelerationThreshold: s.accelerationThreshold,
+      maxAccelerationFactor: s.maxAccelerationFactor,
+    }))
   );
 
   const bind = useGestures({
@@ -25,7 +31,10 @@ export default function TouchPad(props: TouchPadProps) {
       socket?.send(JSON.stringify({ type: 'middleClick' }));
     },
     onMove(x, y) {
-      socket?.send(JSON.stringify({ type: 'move', x: x * moveSensitivity, y: y * moveSensitivity }));
+      const [acceleratedX, acceleratedY] = getAcceleratedCoords(x, y, accelerationThreshold, maxAccelerationFactor);
+      socket?.send(
+        JSON.stringify({ type: 'move', x: acceleratedX * moveSensitivity, y: acceleratedY * moveSensitivity })
+      );
     },
     onScroll(x, y) {
       socket?.send(JSON.stringify({ type: 'scroll', x: x * scrollSensitivity, y: y * scrollSensitivity }));

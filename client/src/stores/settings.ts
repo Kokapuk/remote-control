@@ -4,6 +4,8 @@ import { persist } from 'zustand/middleware';
 export interface SettingsStore {
   moveSensitivity: number;
   scrollSensitivity: number;
+  accelerationThreshold: number;
+  maxAccelerationFactor: number;
   setSettings(partialSettings: Partial<Omit<SettingsStore, 'setSettings'>>): void;
 }
 
@@ -12,6 +14,8 @@ const useSettingsStore = create<SettingsStore>()(
     (set) => ({
       moveSensitivity: 2,
       scrollSensitivity: 0.05,
+      accelerationThreshold: 30,
+      maxAccelerationFactor: 2,
       setSettings(partialSettings) {
         set(partialSettings);
       },

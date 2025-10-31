@@ -1,5 +1,5 @@
-import useSocketStore from '@stores/socket';
-import { toaster } from '@ui/toaster';
+import useSocketStore from '@/stores/socket';
+import { toaster } from '@/ui/toaster';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useShallow } from 'zustand/shallow';

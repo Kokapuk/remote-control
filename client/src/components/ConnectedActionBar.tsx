@@ -1,7 +1,7 @@
+import useSocketStore from '@/stores/socket';
+import { Tooltip } from '@/ui/tooltip';
 import { ActionBar, CloseButton, IconButton, Portal, Text } from '@chakra-ui/react';
-import useSocketStore from '@stores/socket';
-import { Tooltip } from '@ui/tooltip';
-import { HiAdjustmentsHorizontal } from 'react-icons/hi2';
+import { FaSliders } from 'react-icons/fa6';
 import { Link } from 'react-router';
 import { useShallow } from 'zustand/shallow';
 
@@ -28,11 +28,9 @@ export default function ConnectedActionBar() {
             <ActionBar.Separator />
 
             <Link to="/settings">
-              <Tooltip content="Settings">
-                <IconButton variant="subtle" size="sm">
-                  <HiAdjustmentsHorizontal />
-                </IconButton>
-              </Tooltip>
+              <IconButton variant="subtle" size="sm">
+                <FaSliders />
+              </IconButton>
             </Link>
 
             <ActionBar.Separator />

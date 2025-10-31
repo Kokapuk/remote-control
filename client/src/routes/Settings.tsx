@@ -1,26 +1,34 @@
+import useSettingsStore from '@/stores/settings';
+import { Slider } from '@/ui/slider';
+import { toaster } from '@/ui/toaster';
 import { Button, Card, Field, Stack } from '@chakra-ui/react';
-import useSettingsStore from '@stores/settings';
-import { Slider } from '@ui/slider';
-import { toaster } from '@ui/toaster';
 import { useNavigate } from 'react-router';
 import { useShallow } from 'zustand/shallow';
 
 export default function Settings() {
   const navigate = useNavigate();
 
-  const { moveSensitivity, scrollSensitivity, setSettings } = useSettingsStore(
-    useShallow((s) => ({
-      moveSensitivity: s.moveSensitivity,
-      scrollSensitivity: s.scrollSensitivity,
-      setSettings: s.setSettings,
-    }))
-  );
+  const { moveSensitivity, scrollSensitivity, accelerationThreshold, maxAccelerationFactor, setSettings } =
+    useSettingsStore(
+      useShallow((s) => ({
+        moveSensitivity: s.moveSensitivity,
+        scrollSensitivity: s.scrollSensitivity,
+        accelerationThreshold: s.accelerationThreshold,
+        maxAccelerationFactor: s.maxAccelerationFactor,
+        setSettings: s.setSettings,
+      }))
+    );
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const formdata = Object.fromEntries(new FormData(event.currentTarget).entries());
-    setSettings({ moveSensitivity: +formdata.moveSensitivity, scrollSensitivity: +formdata.scrollSensitivity });
+    setSettings({
+      moveSensitivity: +formdata.moveSensitivity,
+      scrollSensitivity: +formdata.scrollSensitivity,
+      accelerationThreshold: +formdata.accelerationThreshold,
+      maxAccelerationFactor: +formdata.maxAccelerationFactor,
+    });
     toaster.success({ title: 'Saved' });
   };
 
@@ -53,6 +61,30 @@ export default function Settings() {
               showValue
               name="scrollSensitivity"
               label="Scroll sensitivity"
+              w="full"
+            />
+          </Field.Root>
+          <Field.Root>
+            <Slider
+              defaultValue={[accelerationThreshold]}
+              min={1}
+              step={1}
+              max={100}
+              showValue
+              name="accelerationThreshold"
+              label="Acceleration threshold"
+              w="full"
+            />
+          </Field.Root>
+          <Field.Root>
+            <Slider
+              defaultValue={[maxAccelerationFactor]}
+              min={1}
+              step={0.1}
+              max={10}
+              showValue
+              name="maxAccelerationFactor"
+              label="Max acceleration factor"
               w="full"
             />
           </Field.Root>

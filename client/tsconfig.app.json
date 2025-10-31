@@ -25,9 +25,7 @@
     "noUncheckedSideEffectImports": true,
 
     "paths": {
-      "@routes/*": ["./src/routes/*"],
-      "@stores/*": ["./src/stores/*"],
-      "@ui/*": ["./src/ui/*"],
+      "@/*": ["./src/*"],
     }
   },
   "include": ["src"]

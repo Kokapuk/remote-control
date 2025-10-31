@@ -1,6 +1,6 @@
+import useSocketStore from '@/stores/socket';
+import { toaster } from '@/ui/toaster';
 import { Button, Card, Field, Input, Stack } from '@chakra-ui/react';
-import useSocketStore from '@stores/socket';
-import { toaster } from '@ui/toaster';
 import { useState } from 'react';
 import { useShallow } from 'zustand/shallow';
 

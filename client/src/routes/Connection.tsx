@@ -1,4 +1,4 @@
-import useSocketStore from '@stores/socket';
+import useSocketStore from '@/stores/socket';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import ConnectionForm from '../components/ConnectionForm';

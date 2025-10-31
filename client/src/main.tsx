@@ -1,9 +1,9 @@
-import { Provider } from '@ui/provider.tsx';
-import theme from '@ui/theme.ts';
-import { Toaster } from '@ui/toaster.tsx';
+import { ChakraProvider } from '@chakra-ui/react';
 import { createRoot } from 'react-dom/client';
 import Router from './router.tsx';
-import { ChakraProvider } from '@chakra-ui/react';
+import { Provider } from './ui/provider.tsx';
+import theme from './ui/theme.ts';
+import { Toaster } from './ui/toaster.tsx';
 
 createRoot(document.getElementById('root')!).render(
   <Provider>
