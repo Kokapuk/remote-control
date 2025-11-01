@@ -38,6 +38,7 @@ export default function Settings() {
       <Card.Header>
         <Card.Title>Settings</Card.Title>
       </Card.Header>
+
       <Card.Body>
         <Stack gap="8">
           <Field.Root>
@@ -52,18 +53,20 @@ export default function Settings() {
               w="full"
             />
           </Field.Root>
+
           <Field.Root>
             <Slider
               defaultValue={[scrollSensitivity]}
-              min={0.01}
-              step={0.01}
-              max={0.25}
+              min={1}
+              step={0.1}
+              max={10}
               showValue
               name="scrollSensitivity"
               label="Scroll sensitivity"
               w="full"
             />
           </Field.Root>
+
           <Field.Root>
             <Slider
               defaultValue={[accelerationThreshold]}
@@ -76,6 +79,7 @@ export default function Settings() {
               w="full"
             />
           </Field.Root>
+
           <Field.Root>
             <Slider
               defaultValue={[maxAccelerationFactor]}
@@ -90,6 +94,7 @@ export default function Settings() {
           </Field.Root>
         </Stack>
       </Card.Body>
+
       <Card.Footer justifyContent="flex-end">
         <Button onClick={() => navigate(-1)} variant="outline">
           Back

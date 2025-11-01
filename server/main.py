@@ -2,12 +2,14 @@ import asyncio
 import websockets
 import socket
 import json
-from pynput.mouse import Button, Controller
-
+from mouse import Mouse
+from win_mouse import WindowsMouse
+from keyboard import Keyboard
+from win_keyboard import WindowsKeyboard
 
 PORT = 8765
-
-mouse = Controller()
+mouse = Mouse(WindowsMouse())
+keyboard = Keyboard(WindowsKeyboard())
 
 
 def get_local_ip():
@@ -34,19 +36,21 @@ async def handler(websocket):
 
             match data['type']:
                 case 'leftClick':
-                    mouse.click(Button.left)
+                    mouse.click_left()
                 case 'rightClick':
-                    mouse.click(Button.right)
+                    mouse.click_right()
                 case 'middleClick':
-                    mouse.click(Button.middle)
+                    mouse.click_middle()
                 case 'move':
-                    mouse.move(data['x'], data['y'])
+                    mouse.move(int(data['x']), int(data['y']))
                 case 'scroll':
-                    mouse.scroll(data['x'], data['y'])
+                    mouse.scroll(int(data['x']), int(data['y']))
                 case 'leftPress':
-                    mouse.press(Button.left)
+                    mouse.press_left()
                 case 'leftRelease':
-                    mouse.release(Button.left)
+                    mouse.release_left()
+                case 'keyboardPress':
+                    keyboard.press(data['keycode'])
     finally:
         print('Client disconnected')
 

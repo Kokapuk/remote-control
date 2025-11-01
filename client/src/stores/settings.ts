@@ -13,8 +13,8 @@ const useSettingsStore = create<SettingsStore>()(
   persist(
     (set) => ({
       moveSensitivity: 2,
-      scrollSensitivity: 0.05,
-      accelerationThreshold: 30,
+      scrollSensitivity: 3,
+      accelerationThreshold: 25,
       maxAccelerationFactor: 2,
       setSettings(partialSettings) {
         set(partialSettings);

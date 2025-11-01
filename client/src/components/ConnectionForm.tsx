@@ -1,6 +1,6 @@
 import useSocketStore from '@/stores/socket';
 import { toaster } from '@/ui/toaster';
-import { Button, Card, Field, Input, Stack } from '@chakra-ui/react';
+import { Button, Card, Field, Input, NumberInput, Stack } from '@chakra-ui/react';
 import { useState } from 'react';
 import { useShallow } from 'zustand/shallow';
 
@@ -55,6 +55,7 @@ export default function ConnectionForm() {
       <Card.Header>
         <Card.Title>Connection</Card.Title>
       </Card.Header>
+
       <Card.Body>
         <Stack gap="4">
           <Field.Root>
@@ -67,12 +68,17 @@ export default function ConnectionForm() {
               pattern="^(?:(?:(?!25?[6-9])[12]\d|[1-9])?\d\.?\b){4}$"
             />
           </Field.Root>
+
           <Field.Root>
             <Field.Label>Port</Field.Label>
-            <Input name="port" type="number" defaultValue={savedPort} required min={0} max={65535} />
+            <NumberInput.Root w="full">
+              <NumberInput.Control />
+              <NumberInput.Input name="port" defaultValue={savedPort} required min={0} max={65535} />
+            </NumberInput.Root>
           </Field.Root>
         </Stack>
       </Card.Body>
+
       <Card.Footer justifyContent="flex-end">
         <Button type="submit" loading={connecting}>
           Connect

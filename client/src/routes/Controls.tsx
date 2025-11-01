@@ -1,3 +1,4 @@
+import Hotbar from '@/components/Hotbar';
 import useSocketStore from '@/stores/socket';
 import { toaster } from '@/ui/toaster';
 import { useEffect } from 'react';
@@ -44,6 +45,7 @@ export default function Controls() {
     <>
       <TouchPad position="absolute" inset="0" />
       <ConnectedActionBar />
+      <Hotbar />
     </>
   );
 }

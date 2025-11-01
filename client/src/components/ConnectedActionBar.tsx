@@ -1,7 +1,6 @@
 import useSocketStore from '@/stores/socket';
-import { Tooltip } from '@/ui/tooltip';
 import { ActionBar, CloseButton, IconButton, Portal, Text } from '@chakra-ui/react';
-import { FaSliders } from 'react-icons/fa6';
+import { FaFire, FaSliders } from 'react-icons/fa6';
 import { Link } from 'react-router';
 import { useShallow } from 'zustand/shallow';
 
@@ -21,7 +20,12 @@ export default function ConnectedActionBar() {
   return (
     <ActionBar.Root open onOpenChange={(e) => !e.open && closeConnection()} closeOnInteractOutside={false}>
       <Portal>
-        <ActionBar.Positioner>
+        <ActionBar.Positioner
+          top="20px"
+          bottom="unset"
+          justifyContent="flex-end"
+          paddingRight="20px"
+        >
           <ActionBar.Content>
             <Text fontSize="xs">{hostname}</Text>
 
@@ -32,14 +36,17 @@ export default function ConnectedActionBar() {
                 <FaSliders />
               </IconButton>
             </Link>
+            <Link to="/hotbar">
+              <IconButton variant="subtle" size="sm">
+                <FaFire />
+              </IconButton>
+            </Link>
 
             <ActionBar.Separator />
 
-            <Tooltip content="Disconnect">
-              <ActionBar.CloseTrigger asChild>
-                <CloseButton size="sm" />
-              </ActionBar.CloseTrigger>
-            </Tooltip>
+            <ActionBar.CloseTrigger asChild>
+              <CloseButton size="sm" variant="subtle" colorPalette="red" />
+            </ActionBar.CloseTrigger>
           </ActionBar.Content>
         </ActionBar.Positioner>
       </Portal>
