@@ -1,10 +1,12 @@
-import { Box } from '@chakra-ui/react';
-import { Suspense } from 'react';
+import { Box, type BoxProps } from '@chakra-ui/react';
+import { Suspense, type RefAttributes } from 'react';
 import { Outlet } from 'react-router';
 
-export default function RootLayout() {
+export type RootLayoutProps = BoxProps & RefAttributes<HTMLDivElement>;
+
+export default function RootLayout(props: RootLayoutProps) {
   return (
-    <Box as="main" paddingTop="10" paddingInline="5">
+    <Box as="main" paddingTop="10" paddingInline="5" {...props}>
       <Suspense>
         <Outlet />
       </Suspense>

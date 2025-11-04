@@ -50,7 +50,7 @@ export default function Settings() {
               showValue
               name="moveSensitivity"
               label="Move sensitivity"
-              w="full"
+              width="100%"
             />
           </Field.Root>
 
@@ -63,7 +63,7 @@ export default function Settings() {
               showValue
               name="scrollSensitivity"
               label="Scroll sensitivity"
-              w="full"
+              width="100%"
             />
           </Field.Root>
 
@@ -76,7 +76,7 @@ export default function Settings() {
               showValue
               name="accelerationThreshold"
               label="Acceleration threshold"
-              w="full"
+              width="100%"
             />
           </Field.Root>
 
@@ -89,7 +89,7 @@ export default function Settings() {
               showValue
               name="maxAccelerationFactor"
               label="Max acceleration factor"
-              w="full"
+              width="100%"
             />
           </Field.Root>
         </Stack>
