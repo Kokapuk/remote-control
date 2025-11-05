@@ -18,7 +18,8 @@
         "windowEffects": { "effects": ["micaDark"] },
         "transparent": true,
         "decorations": false,
-        "resizable": false
+        "resizable": false,
+        "center": true
       }
     ],
     "security": {

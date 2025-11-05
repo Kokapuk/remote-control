@@ -23,9 +23,12 @@ export default function ConnectionForm() {
     const cleanup = () => {
       socket.removeEventListener('open', handleOpen);
       socket.removeEventListener('error', handleError);
+      socket.removeEventListener('close', handleError);
+      socket.removeEventListener('message', handleMessage);
     };
 
     const handleMessage = (event: MessageEvent<string>) => {
+      setSocket(socket);
       setHostname(event.data);
       setConnecting(false);
       cleanup();
@@ -33,20 +36,20 @@ export default function ConnectionForm() {
     };
 
     const handleOpen = () => {
-      setSocket(socket);
       localStorage.setItem('savedIp', formdata.ip as string);
       localStorage.setItem('savedPort', formdata.port as string);
     };
 
-    const handleError = () => {
-      toaster.error({ title: 'Failed to connect' });
+    const handleError = (event: CloseEvent | Event) => {
+      toaster.error({ title: (event as CloseEvent).reason ?? 'Failed to connect' });
       setConnecting(false);
       cleanup();
     };
 
-    socket.addEventListener('message', handleMessage);
     socket.addEventListener('open', handleOpen);
     socket.addEventListener('error', handleError);
+    socket.addEventListener('close', handleError);
+    socket.addEventListener('message', handleMessage);
   };
 
   return (
