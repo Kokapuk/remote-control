@@ -33,11 +33,17 @@ export default function TouchPad(props: TouchPadProps) {
     onMove(x, y) {
       const [acceleratedX, acceleratedY] = getAcceleratedCoords(x, y, accelerationThreshold, maxAccelerationFactor);
       socket?.send(
-        JSON.stringify({ type: 'move', x: acceleratedX * moveSensitivity, y: acceleratedY * moveSensitivity })
+        JSON.stringify({
+          type: 'move',
+          x: Math.trunc(acceleratedX * moveSensitivity),
+          y: Math.trunc(acceleratedY * moveSensitivity),
+        })
       );
     },
     onScroll(x, y) {
-      socket?.send(JSON.stringify({ type: 'scroll', x: x * scrollSensitivity, y: y * scrollSensitivity }));
+      socket?.send(
+        JSON.stringify({ type: 'scroll', x: Math.trunc(x * scrollSensitivity), y: Math.trunc(y * scrollSensitivity) })
+      );
     },
     onLeftPress() {
       socket?.send(JSON.stringify({ type: 'leftPress' }));

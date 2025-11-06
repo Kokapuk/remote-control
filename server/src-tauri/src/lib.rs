@@ -1,4 +1,6 @@
 mod server;
+mod mouse;
+mod keyboard;
 
 #[tauri::command]
 async fn start_server(port: u16) {
