@@ -1,10 +1,10 @@
-use crate::keyboard::{BaseKeyboard, WindowsKeyboard};
-use crate::mouse::{BaseMouse, WindowsMouse};
+use crate::keyboard::{BaseKeyboard, Keyboard, WindowsKeyboard};
+use crate::mouse::{BaseMouse, Mouse, WindowsMouse};
 use futures::{SinkExt, StreamExt};
 use gethostname::gethostname;
 use serde::Deserialize;
 use std::sync::{
-    Arc, RwLock,
+    Arc, LazyLock, RwLock,
     atomic::{AtomicBool, Ordering},
 };
 use tokio::net::{TcpListener, TcpStream};
@@ -12,7 +12,7 @@ use tokio_tungstenite::{
     accept_async,
     tungstenite::{
         Utf8Bytes,
-        protocol::{CloseFrame, Message},
+        protocol::{CloseFrame, Message, frame::coding::CloseCode},
     },
 };
 use tokio_util::sync::CancellationToken;
@@ -46,7 +46,9 @@ pub enum MessageData {
 }
 
 static CANCEL_TOKEN: RwLock<Option<CancellationToken>> = RwLock::new(None);
-static CLIENT_CONNECTED: RwLock<Option<Arc<std::sync::atomic::AtomicBool>>> = RwLock::new(None);
+static CLIENT_CONNECTED: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
+static MOUSE: LazyLock<Mouse> = LazyLock::new(|| Mouse::new(Box::new(WindowsMouse)));
+static KEYBOARD: LazyLock<Keyboard> = LazyLock::new(|| Keyboard::new(Box::new(WindowsKeyboard)));
 
 pub async fn start_server(port: u16) {
     let listener = TcpListener::bind(format!("0.0.0.0:{port}"))
@@ -54,7 +56,7 @@ pub async fn start_server(port: u16) {
         .expect("Failed to bind");
 
     let mut c = CLIENT_CONNECTED.write().unwrap();
-    *c = Some(Arc::new(std::sync::atomic::AtomicBool::new(false)));
+    *c = Some(Arc::new(AtomicBool::new(false)));
 
     tauri::async_runtime::spawn(handle_server_running(listener));
     println!("Server started");
@@ -99,7 +101,7 @@ async fn handle_new_connection(stream: TcpStream, cancel: CancellationToken) {
         if let Ok(mut ws) = accept_async(stream).await {
             let _ = ws
                 .close(Some(CloseFrame {
-                    code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Error,
+                    code: CloseCode::Error,
                     reason: "Server already has active connection".into(),
                 }))
                 .await;
@@ -167,35 +169,35 @@ fn handle_message(content: Utf8Bytes) {
 
     match data {
         MessageData::LeftClick => {
-            WindowsMouse::click_left();
+            MOUSE.click_left();
         }
 
         MessageData::RightClick => {
-            WindowsMouse::click_right();
+            MOUSE.click_right();
         }
 
         MessageData::MiddleClick => {
-            WindowsMouse::click_middle();
+            MOUSE.click_middle();
         }
 
         MessageData::LeftPress => {
-            WindowsMouse::press_left();
+            MOUSE.press_left();
         }
 
         MessageData::LeftRelease => {
-            WindowsMouse::release_left();
+            MOUSE.release_left();
         }
 
         MessageData::Move { x, y } => {
-            WindowsMouse::move_relative(x, y);
+            MOUSE.move_relative(x, y);
         }
 
         MessageData::Scroll { x, y } => {
-            WindowsMouse::scroll(x, y);
+            MOUSE.scroll(x, y);
         }
 
         MessageData::KeyboardPress { keycode } => {
-            WindowsKeyboard::press(keycode);
+            KEYBOARD.press(keycode);
         }
     }
 }
@@ -203,7 +205,5 @@ fn handle_message(content: Utf8Bytes) {
 pub fn stop_server() {
     if let Some(token) = CANCEL_TOKEN.read().unwrap().as_ref() {
         token.cancel();
-    } else {
-        println!("Server is not running");
     }
 }
