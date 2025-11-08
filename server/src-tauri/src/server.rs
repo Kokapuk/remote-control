@@ -47,16 +47,22 @@ pub enum MessageData {
 
 static CANCEL_TOKEN: RwLock<Option<CancellationToken>> = RwLock::new(None);
 static CLIENT_CONNECTED: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
+static ALLOW_MULTIPLE_CONNECTIONS: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
 static MOUSE: LazyLock<Mouse> = LazyLock::new(|| Mouse::new(Box::new(WindowsMouse)));
 static KEYBOARD: LazyLock<Keyboard> = LazyLock::new(|| Keyboard::new(Box::new(WindowsKeyboard)));
 
-pub async fn start_server(port: u16) {
+pub async fn start_server(port: u16, allow_multiple_connections: Option<bool>) {
     let listener = TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
         .expect("Failed to bind");
 
-    let mut c = CLIENT_CONNECTED.write().unwrap();
-    *c = Some(Arc::new(AtomicBool::new(false)));
+    let mut client_connected_flag = CLIENT_CONNECTED.write().unwrap();
+    *client_connected_flag = Some(Arc::new(AtomicBool::new(false)));
+
+    let mut allow_multiple_connections_flag = ALLOW_MULTIPLE_CONNECTIONS.write().unwrap();
+    *allow_multiple_connections_flag = Some(Arc::new(AtomicBool::new(
+        allow_multiple_connections.unwrap_or(false),
+    )));
 
     tauri::async_runtime::spawn(handle_server_running(listener));
     println!("Server started");
@@ -94,8 +100,14 @@ async fn handle_server_running(listener: TcpListener) {
 
 async fn handle_new_connection(stream: TcpStream, cancel: CancellationToken) {
     let connected_flag = CLIENT_CONNECTED.read().unwrap().as_ref().unwrap().clone();
+    let allow_multiple_connections_flag = ALLOW_MULTIPLE_CONNECTIONS
+        .read()
+        .unwrap()
+        .as_ref()
+        .map(|flag| flag.load(Ordering::Relaxed))
+        .unwrap_or(false);
 
-    if connected_flag.swap(true, Ordering::SeqCst) {
+    if !allow_multiple_connections_flag && connected_flag.swap(true, Ordering::SeqCst) {
         println!("Client rejected");
 
         if let Ok(mut ws) = accept_async(stream).await {

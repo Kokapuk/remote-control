@@ -74,9 +74,9 @@ export default function ConnectionForm() {
 
           <Field.Root>
             <Field.Label>Port</Field.Label>
-            <NumberInput.Root width="100%">
+            <NumberInput.Root defaultValue={savedPort ?? '8765'} name="port" required min={1} max={65535} width="100%">
               <NumberInput.Control />
-              <NumberInput.Input name="port" defaultValue={savedPort} required min={0} max={65535} />
+              <NumberInput.Input />
             </NumberInput.Root>
           </Field.Root>
         </Stack>

@@ -1,10 +1,10 @@
-mod server;
-mod mouse;
 mod keyboard;
+mod mouse;
+mod server;
 
 #[tauri::command]
-async fn start_server(port: u16) {
-    server::start_server(port).await;
+async fn start_server(port: u16, allow_multiple_connections: bool) {
+    server::start_server(port, Some(allow_multiple_connections)).await;
 }
 
 #[tauri::command]
