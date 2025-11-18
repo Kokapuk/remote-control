@@ -1,6 +1,7 @@
 import { Switch } from '@/ui/switch';
 import { Button, Card, Field, NumberInput, Stack } from '@chakra-ui/react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { FormEvent, useEffect, useState } from 'react';
 
 export default function ServerForm() {
@@ -24,16 +25,23 @@ export default function ServerForm() {
 
     if (isServerRunning) {
       await invoke('stop_server');
-      setServerRunning(false);
     } else {
       const options = { port, allowMultipleConnections };
-
       await invoke('start_server', options);
-      setServerRunning(true);
 
       localStorage.setItem('savedOptions', JSON.stringify(options));
     }
   };
+
+  useEffect(() => {
+    const unlistenServerStarted = listen('server-started', () => setServerRunning(true));
+    const unlistenServerStopped = listen('server-stopped', () => setServerRunning(false));
+
+    return () => {
+      unlistenServerStarted.then((f) => f());
+      unlistenServerStopped.then((f) => f());
+    };
+  }, []);
 
   return (
     <Card.Root as="form" onSubmit={toggleServerRunning as any} width="sm" marginInline="auto" marginTop="16">

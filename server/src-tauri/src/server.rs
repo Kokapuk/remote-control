@@ -1,12 +1,15 @@
+use crate::APP_HANDLE;
 use crate::keyboard::{BaseKeyboard, Keyboard, WindowsKeyboard};
 use crate::mouse::{BaseMouse, Mouse, WindowsMouse};
 use futures::{SinkExt, StreamExt};
 use gethostname::gethostname;
 use serde::Deserialize;
+use std::panic;
 use std::sync::{
     Arc, LazyLock, RwLock,
     atomic::{AtomicBool, Ordering},
 };
+use tauri::Emitter;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::{
     accept_async,
@@ -45,6 +48,7 @@ pub enum MessageData {
     KeyboardPress { keycode: u8 },
 }
 
+static SERVER_RUNNING: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
 static CANCEL_TOKEN: RwLock<Option<CancellationToken>> = RwLock::new(None);
 static CLIENT_CONNECTED: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
 static ALLOW_MULTIPLE_CONNECTIONS: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
@@ -56,6 +60,9 @@ pub async fn start_server(port: u16, allow_multiple_connections: Option<bool>) {
         .await
         .expect("Failed to bind");
 
+    let mut server_running_flag = SERVER_RUNNING.write().unwrap();
+    *server_running_flag = Some(Arc::new(AtomicBool::new(true)));
+
     let mut client_connected_flag = CLIENT_CONNECTED.write().unwrap();
     *client_connected_flag = Some(Arc::new(AtomicBool::new(false)));
 
@@ -66,13 +73,19 @@ pub async fn start_server(port: u16, allow_multiple_connections: Option<bool>) {
 
     tauri::async_runtime::spawn(handle_server_running(listener));
     println!("Server started");
+
+    APP_HANDLE
+        .get()
+        .unwrap()
+        .emit("server-started", ())
+        .unwrap();
 }
 
 async fn handle_server_running(listener: TcpListener) {
     let cancel = CancellationToken::new();
     {
-        let mut t = CANCEL_TOKEN.write().unwrap();
-        *t = Some(cancel.clone());
+        let mut token = CANCEL_TOKEN.write().unwrap();
+        *token = Some(cancel.clone());
     }
 
     loop {
@@ -96,6 +109,15 @@ async fn handle_server_running(listener: TcpListener) {
     }
 
     println!("Server stopped");
+
+    let mut server_running_flag = SERVER_RUNNING.write().unwrap();
+    *server_running_flag = Some(Arc::new(AtomicBool::new(false)));
+
+    APP_HANDLE
+        .get()
+        .unwrap()
+        .emit("server-stopped", ())
+        .unwrap();
 }
 
 async fn handle_new_connection(stream: TcpStream, cancel: CancellationToken) {
@@ -111,12 +133,12 @@ async fn handle_new_connection(stream: TcpStream, cancel: CancellationToken) {
         println!("Client rejected");
 
         if let Ok(mut ws) = accept_async(stream).await {
-            let _ = ws
-                .close(Some(CloseFrame {
-                    code: CloseCode::Error,
-                    reason: "Server already has active connection".into(),
-                }))
-                .await;
+            ws.close(Some(CloseFrame {
+                code: CloseCode::Error,
+                reason: "Server already has active connection".into(),
+            }))
+            .await
+            .unwrap();
         }
 
         return;
@@ -147,33 +169,44 @@ async fn handle_connection(
         .expect("Handshake failed");
     println!("Client connected");
 
-    loop {
+    let disconnected_with_error = loop {
         tokio::select! {
             msg = receiver.next() => {
                 match msg {
                     Some(Ok(Message::Text(content))) => {
-                        handle_message(content);
+                        let result = panic::catch_unwind(|| handle_message(content));
+
+                        if result.is_err() {
+                          break true;
+                        }
                     }
                     Some(Ok(Message::Close(_))) => {
-                        break;
+                        break false;
                     }
                     Some(Ok(_)) => (),
                     Some(Err(e)) => {
                         println!("Error: {}", e);
-                        break;
+                        break true;
                     }
-                    None => break,
+                    None => break false,
                 }
             }
 
             _ = cancel.cancelled() => {
-                break;
+                break false;
             }
         }
-    }
+    };
 
     connected_flag.store(false, Ordering::SeqCst);
-    println!("Client disconnected");
+    println!(
+        "Client disconnected{}",
+        if disconnected_with_error {
+            " with error"
+        } else {
+            ""
+        }
+    );
 }
 
 fn handle_message(content: Utf8Bytes) {
