@@ -1,4 +1,5 @@
 use windows::Win32::UI::Input::KeyboardAndMouse;
+use windows::Win32::UI::Input::KeyboardAndMouse::keybd_event;
 
 pub trait BaseKeyboard: Send + Sync {
     fn press(&self, keycode: u8);
@@ -9,8 +10,8 @@ pub struct WindowsKeyboard;
 impl BaseKeyboard for WindowsKeyboard {
     fn press(&self, keycode: u8) {
         unsafe {
-            KeyboardAndMouse::keybd_event(keycode, 0, KeyboardAndMouse::KEYEVENTF_EXTENDEDKEY, 0);
-            KeyboardAndMouse::keybd_event(
+            keybd_event(keycode, 0, KeyboardAndMouse::KEYEVENTF_EXTENDEDKEY, 0);
+            keybd_event(
                 keycode,
                 0,
                 KeyboardAndMouse::KEYEVENTF_EXTENDEDKEY | KeyboardAndMouse::KEYEVENTF_KEYUP,

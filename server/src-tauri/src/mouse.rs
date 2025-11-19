@@ -1,4 +1,5 @@
 use windows::Win32::UI::Input::KeyboardAndMouse;
+use windows::Win32::UI::Input::KeyboardAndMouse::mouse_event;
 
 pub trait BaseMouse: Sync + Send {
     fn press_left(&self);
@@ -19,37 +20,37 @@ pub struct WindowsMouse;
 impl BaseMouse for WindowsMouse {
     fn press_left(&self) {
         unsafe {
-            KeyboardAndMouse::mouse_event(KeyboardAndMouse::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+            mouse_event(KeyboardAndMouse::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
         }
     }
 
     fn release_left(&self) {
         unsafe {
-            KeyboardAndMouse::mouse_event(KeyboardAndMouse::MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+            mouse_event(KeyboardAndMouse::MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
         }
     }
 
     fn press_right(&self) {
         unsafe {
-            KeyboardAndMouse::mouse_event(KeyboardAndMouse::MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0);
+            mouse_event(KeyboardAndMouse::MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0);
         }
     }
 
     fn release_right(&self) {
         unsafe {
-            KeyboardAndMouse::mouse_event(KeyboardAndMouse::MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
+            mouse_event(KeyboardAndMouse::MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
         }
     }
 
     fn press_middle(&self) {
         unsafe {
-            KeyboardAndMouse::mouse_event(KeyboardAndMouse::MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, 0);
+            mouse_event(KeyboardAndMouse::MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, 0);
         }
     }
 
     fn release_middle(&self) {
         unsafe {
-            KeyboardAndMouse::mouse_event(KeyboardAndMouse::MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0);
+            mouse_event(KeyboardAndMouse::MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0);
         }
     }
 
@@ -70,13 +71,13 @@ impl BaseMouse for WindowsMouse {
 
     fn move_relative(&self, x: i32, y: i32) {
         unsafe {
-            KeyboardAndMouse::mouse_event(KeyboardAndMouse::MOUSEEVENTF_MOVE, x, y, 0, 0);
+            mouse_event(KeyboardAndMouse::MOUSEEVENTF_MOVE, x, y, 0, 0);
         }
     }
 
     fn scroll(&self, x: i32, y: i32) {
         unsafe {
-            KeyboardAndMouse::mouse_event(KeyboardAndMouse::MOUSEEVENTF_WHEEL, 0, 0, y, x as usize);
+            mouse_event(KeyboardAndMouse::MOUSEEVENTF_WHEEL, 0, 0, y, x as usize);
         }
     }
 }

@@ -6,7 +6,7 @@ use gethostname::gethostname;
 use serde::Deserialize;
 use std::panic;
 use std::sync::{
-    Arc, LazyLock, RwLock,
+    LazyLock, RwLock,
     atomic::{AtomicBool, Ordering},
 };
 use tauri::Emitter;
@@ -48,10 +48,10 @@ pub enum MessageData {
     KeyboardPress { keycode: u8 },
 }
 
-static SERVER_RUNNING: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
+static SERVER_RUNNING: AtomicBool = AtomicBool::new(true);
 static CANCEL_TOKEN: RwLock<Option<CancellationToken>> = RwLock::new(None);
-static CLIENT_CONNECTED: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
-static ALLOW_MULTIPLE_CONNECTIONS: RwLock<Option<Arc<AtomicBool>>> = RwLock::new(None);
+static ALLOW_MULTIPLE_CONNECTIONS: AtomicBool = AtomicBool::new(false);
+static CLIENT_CONNECTED: AtomicBool = AtomicBool::new(false);
 static MOUSE: LazyLock<Mouse> = LazyLock::new(|| Mouse::new(Box::new(WindowsMouse)));
 static KEYBOARD: LazyLock<Keyboard> = LazyLock::new(|| Keyboard::new(Box::new(WindowsKeyboard)));
 
@@ -60,16 +60,10 @@ pub async fn start_server(port: u16, allow_multiple_connections: Option<bool>) {
         .await
         .expect("Failed to bind");
 
-    let mut server_running_flag = SERVER_RUNNING.write().unwrap();
-    *server_running_flag = Some(Arc::new(AtomicBool::new(true)));
+    let mut cancel_token = CANCEL_TOKEN.write().unwrap();
+    *cancel_token = Some(CancellationToken::new());
 
-    let mut client_connected_flag = CLIENT_CONNECTED.write().unwrap();
-    *client_connected_flag = Some(Arc::new(AtomicBool::new(false)));
-
-    let mut allow_multiple_connections_flag = ALLOW_MULTIPLE_CONNECTIONS.write().unwrap();
-    *allow_multiple_connections_flag = Some(Arc::new(AtomicBool::new(
-        allow_multiple_connections.unwrap_or(false),
-    )));
+    ALLOW_MULTIPLE_CONNECTIONS.store(allow_multiple_connections.unwrap_or(false), Ordering::SeqCst);
 
     tauri::async_runtime::spawn(handle_server_running(listener));
     println!("Server started");
@@ -82,19 +76,14 @@ pub async fn start_server(port: u16, allow_multiple_connections: Option<bool>) {
 }
 
 async fn handle_server_running(listener: TcpListener) {
-    let cancel = CancellationToken::new();
-    {
-        let mut token = CANCEL_TOKEN.write().unwrap();
-        *token = Some(cancel.clone());
-    }
+    let cancel_token = CANCEL_TOKEN.read().unwrap().clone().unwrap();
 
     loop {
         tokio::select! {
             accept_result = listener.accept() => {
                 match accept_result {
                     Ok((stream, _)) => {
-                        let child = cancel.child_token();
-                        tauri::async_runtime::spawn(handle_new_connection(stream, child));
+                        tauri::async_runtime::spawn(handle_new_connection(stream));
                     }
                     Err(e) => {
                         println!("Accept error: {}", e);
@@ -102,7 +91,7 @@ async fn handle_server_running(listener: TcpListener) {
                 }
             }
 
-            _ = cancel.cancelled() => {
+            _ = cancel_token.cancelled() => {
                 break;
             }
         }
@@ -110,8 +99,7 @@ async fn handle_server_running(listener: TcpListener) {
 
     println!("Server stopped");
 
-    let mut server_running_flag = SERVER_RUNNING.write().unwrap();
-    *server_running_flag = Some(Arc::new(AtomicBool::new(false)));
+    SERVER_RUNNING.store(false, Ordering::SeqCst);
 
     APP_HANDLE
         .get()
@@ -120,16 +108,10 @@ async fn handle_server_running(listener: TcpListener) {
         .unwrap();
 }
 
-async fn handle_new_connection(stream: TcpStream, cancel: CancellationToken) {
-    let connected_flag = CLIENT_CONNECTED.read().unwrap().as_ref().unwrap().clone();
-    let allow_multiple_connections_flag = ALLOW_MULTIPLE_CONNECTIONS
-        .read()
-        .unwrap()
-        .as_ref()
-        .map(|flag| flag.load(Ordering::Relaxed))
-        .unwrap_or(false);
-
-    if !allow_multiple_connections_flag && connected_flag.swap(true, Ordering::SeqCst) {
+async fn handle_new_connection(stream: TcpStream) {
+    if !ALLOW_MULTIPLE_CONNECTIONS.load(Ordering::SeqCst)
+        && CLIENT_CONNECTED.swap(true, Ordering::SeqCst)
+    {
         println!("Client rejected");
 
         if let Ok(mut ws) = accept_async(stream).await {
@@ -144,19 +126,15 @@ async fn handle_new_connection(stream: TcpStream, cancel: CancellationToken) {
         return;
     }
 
-    handle_connection(stream, cancel, connected_flag).await;
+    handle_connection(stream).await;
 }
 
-async fn handle_connection(
-    stream: TcpStream,
-    cancel: CancellationToken,
-    connected_flag: Arc<AtomicBool>,
-) {
+async fn handle_connection(stream: TcpStream) {
     let ws_stream = match accept_async(stream).await {
         Ok(ws) => ws,
         Err(e) => {
             println!("Handshake error: {}", e);
-            connected_flag.store(false, Ordering::SeqCst);
+            CLIENT_CONNECTED.store(false, Ordering::SeqCst);
             return;
         }
     };
@@ -169,6 +147,8 @@ async fn handle_connection(
         .expect("Handshake failed");
     println!("Client connected");
 
+    let cancel_token = CANCEL_TOKEN.read().unwrap().clone().unwrap();
+
     let disconnected_with_error = loop {
         tokio::select! {
             msg = receiver.next() => {
@@ -177,13 +157,13 @@ async fn handle_connection(
                         let result = panic::catch_unwind(|| handle_message(content));
 
                         if result.is_err() {
-                          break true;
+                            break true;
                         }
                     }
                     Some(Ok(Message::Close(_))) => {
                         break false;
                     }
-                    Some(Ok(_)) => (),
+                    Some(Ok(_)) => {},
                     Some(Err(e)) => {
                         println!("Error: {}", e);
                         break true;
@@ -192,13 +172,11 @@ async fn handle_connection(
                 }
             }
 
-            _ = cancel.cancelled() => {
-                break false;
-            }
+            _ = cancel_token.cancelled() => break false,
         }
     };
 
-    connected_flag.store(false, Ordering::SeqCst);
+    CLIENT_CONNECTED.store(false, Ordering::SeqCst);
     println!(
         "Client disconnected{}",
         if disconnected_with_error {
@@ -248,7 +226,7 @@ fn handle_message(content: Utf8Bytes) {
 }
 
 pub fn stop_server() {
-    if let Some(token) = CANCEL_TOKEN.read().unwrap().as_ref() {
-        token.cancel();
+    if let Some(cancel_token) = CANCEL_TOKEN.read().unwrap().as_ref() {
+        cancel_token.cancel();
     }
 }
