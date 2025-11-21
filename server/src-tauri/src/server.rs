@@ -63,7 +63,10 @@ pub async fn start_server(port: u16, allow_multiple_connections: Option<bool>) {
     let mut cancel_token = CANCEL_TOKEN.write().unwrap();
     *cancel_token = Some(CancellationToken::new());
 
-    ALLOW_MULTIPLE_CONNECTIONS.store(allow_multiple_connections.unwrap_or(false), Ordering::SeqCst);
+    ALLOW_MULTIPLE_CONNECTIONS.store(
+        allow_multiple_connections.unwrap_or(false),
+        Ordering::SeqCst,
+    );
 
     tauri::async_runtime::spawn(handle_server_running(listener));
     println!("Server started");

@@ -2,13 +2,18 @@ mod keyboard;
 mod mouse;
 mod server;
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::OnceLock;
-use tauri::{
-    menu::MenuBuilder, tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}, Manager,
-    RunEvent,
-    WebviewWindowBuilder,
+use std::sync::{
+    OnceLock,
+    atomic::{AtomicBool, Ordering},
 };
+use tauri::menu::{IconMenuItemBuilder, MenuItemBuilder};
+use tauri::{
+    App, AppHandle, Manager, RunEvent, WebviewWindow, WebviewWindowBuilder,
+    image::Image,
+    menu::MenuBuilder,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+};
+use tauri_plugin_notification::NotificationExt;
 
 pub static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 static ALLOW_EXIT: AtomicBool = AtomicBool::new(false);
@@ -23,11 +28,44 @@ fn stop_server() {
     server::stop_server();
 }
 
-fn initialize_tray(app: &tauri::App) {
-    let menu = MenuBuilder::new(app).text("quit", "Quit").build().unwrap();
+fn create_main_window(app: &AppHandle) -> WebviewWindow {
+    WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])
+        .unwrap()
+        .build()
+        .unwrap()
+}
+
+fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        window.unminimize().unwrap();
+        window.set_focus().unwrap();
+
+        return;
+    }
+
+    let window = create_main_window(app);
+    window.set_focus().unwrap();
+}
+
+fn initialize_tray(app: &App) {
+    let title_menu_item = IconMenuItemBuilder::new("Remote Control")
+        .id("title")
+        .icon(Image::from_bytes(include_bytes!("../icons/tray.png")).unwrap())
+        .enabled(false)
+        .build(app)
+        .unwrap();
+
+    let menu = MenuBuilder::new(app)
+        .item(&title_menu_item)
+        .separator()
+        .text("show", "Show")
+        .separator()
+        .text("quit", "Quit")
+        .build()
+        .unwrap();
 
     TrayIconBuilder::new()
-        .icon(app.default_window_icon().unwrap().clone())
+        .icon(Image::from_bytes(include_bytes!("../icons/tray.png")).unwrap())
         .tooltip("Remote Control")
         .on_tray_icon_event(|tray, event| match event {
             TrayIconEvent::Click {
@@ -35,27 +73,16 @@ fn initialize_tray(app: &tauri::App) {
                 button_state: MouseButtonState::Up,
                 ..
             } => {
-                let app = tray.app_handle();
-
-                if let Some(window) = app.get_webview_window("main") {
-                    window.unminimize().unwrap();
-                    window.set_focus().unwrap();
-
-                    return;
-                }
-
-                let window = WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])
-                    .unwrap()
-                    .build()
-                    .unwrap();
-
-                window.set_focus().unwrap();
+                show_main_window(&tray.app_handle());
             }
             _ => {}
         })
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => {
+                show_main_window(&app);
+            }
             "quit" => {
                 ALLOW_EXIT.store(true, Ordering::SeqCst);
                 app.exit(0);
@@ -69,11 +96,19 @@ fn initialize_tray(app: &tauri::App) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![start_server, stop_server])
         .setup(|app| {
             APP_HANDLE.set(app.handle().clone()).unwrap();
 
             initialize_tray(app);
+
+            app.notification()
+                .builder()
+                .title("Remote Control")
+                .body("App is running in background")
+                .show()
+                .unwrap();
 
             Ok(())
         })
