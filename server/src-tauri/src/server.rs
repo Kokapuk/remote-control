@@ -1,15 +1,14 @@
-use crate::APP_HANDLE;
 use crate::keyboard::{BaseKeyboard, Keyboard, WindowsKeyboard};
 use crate::mouse::{BaseMouse, Mouse, WindowsMouse};
 use futures::{SinkExt, StreamExt};
 use gethostname::gethostname;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::panic;
 use std::sync::{
     LazyLock, RwLock,
     atomic::{AtomicBool, Ordering},
 };
-use tauri::Emitter;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::{
     accept_async,
@@ -48,12 +47,41 @@ pub enum MessageData {
     KeyboardPress { keycode: u8 },
 }
 
-static SERVER_RUNNING: AtomicBool = AtomicBool::new(true);
+#[derive(Eq, PartialEq, Hash)]
+pub enum ServerEvent {
+    Start,
+    Stop,
+}
+
+static EVENT_LISTENERS: RwLock<Option<HashMap<ServerEvent, Vec<Box<dyn Fn() + Send + Sync>>>>> =
+    RwLock::new(None);
+static SERVER_RUNNING: AtomicBool = AtomicBool::new(false);
 static CANCEL_TOKEN: RwLock<Option<CancellationToken>> = RwLock::new(None);
 static ALLOW_MULTIPLE_CONNECTIONS: AtomicBool = AtomicBool::new(false);
 static CLIENT_CONNECTED: AtomicBool = AtomicBool::new(false);
 static MOUSE: LazyLock<Mouse> = LazyLock::new(|| Mouse::new(Box::new(WindowsMouse)));
 static KEYBOARD: LazyLock<Keyboard> = LazyLock::new(|| Keyboard::new(Box::new(WindowsKeyboard)));
+
+pub fn add_event_listener<F>(event: ServerEvent, listener: F)
+where
+    F: Fn() + Send + Sync + 'static,
+{
+    let mut guard = EVENT_LISTENERS.write().unwrap();
+
+    if guard.is_none() {
+        *guard = Some(HashMap::new());
+    }
+
+    let map = guard.as_mut().unwrap();
+    map.entry(event).or_default().push(Box::new(listener));
+}
+
+fn emit_event(event: ServerEvent) {
+    let guard = EVENT_LISTENERS.read().unwrap();
+    let map = guard.as_ref().unwrap();
+
+    map.get(&event).unwrap().iter().for_each(|f| f());
+}
 
 pub async fn start_server(port: u16, allow_multiple_connections: Option<bool>) {
     let listener = TcpListener::bind(format!("0.0.0.0:{port}"))
@@ -69,13 +97,10 @@ pub async fn start_server(port: u16, allow_multiple_connections: Option<bool>) {
     );
 
     tauri::async_runtime::spawn(handle_server_running(listener));
-    println!("Server started");
+    SERVER_RUNNING.store(true, Ordering::SeqCst);
+    emit_event(ServerEvent::Start);
 
-    APP_HANDLE
-        .get()
-        .unwrap()
-        .emit("server-started", ())
-        .unwrap();
+    println!("Server started");
 }
 
 async fn handle_server_running(listener: TcpListener) {
@@ -100,23 +125,16 @@ async fn handle_server_running(listener: TcpListener) {
         }
     }
 
-    println!("Server stopped");
-
     SERVER_RUNNING.store(false, Ordering::SeqCst);
+    emit_event(ServerEvent::Stop);
 
-    APP_HANDLE
-        .get()
-        .unwrap()
-        .emit("server-stopped", ())
-        .unwrap();
+    println!("Server stopped");
 }
 
 async fn handle_new_connection(stream: TcpStream) {
     if !ALLOW_MULTIPLE_CONNECTIONS.load(Ordering::SeqCst)
         && CLIENT_CONNECTED.swap(true, Ordering::SeqCst)
     {
-        println!("Client rejected");
-
         if let Ok(mut ws) = accept_async(stream).await {
             ws.close(Some(CloseFrame {
                 code: CloseCode::Error,
@@ -125,6 +143,8 @@ async fn handle_new_connection(stream: TcpStream) {
             .await
             .unwrap();
         }
+
+        println!("Client rejected");
 
         return;
     }
@@ -137,6 +157,7 @@ async fn handle_connection(stream: TcpStream) {
         Ok(ws) => ws,
         Err(e) => {
             println!("Handshake error: {}", e);
+
             CLIENT_CONNECTED.store(false, Ordering::SeqCst);
             return;
         }
@@ -148,6 +169,7 @@ async fn handle_connection(stream: TcpStream) {
         .send(Message::Text(gethostname().into_string().unwrap().into()))
         .await
         .expect("Handshake failed");
+
     println!("Client connected");
 
     let cancel_token = CANCEL_TOKEN.read().unwrap().clone().unwrap();
@@ -180,6 +202,7 @@ async fn handle_connection(stream: TcpStream) {
     };
 
     CLIENT_CONNECTED.store(false, Ordering::SeqCst);
+
     println!(
         "Client disconnected{}",
         if disconnected_with_error {
@@ -197,31 +220,24 @@ fn handle_message(content: Utf8Bytes) {
         MessageData::LeftClick => {
             MOUSE.click_left();
         }
-
         MessageData::RightClick => {
             MOUSE.click_right();
         }
-
         MessageData::MiddleClick => {
             MOUSE.click_middle();
         }
-
         MessageData::LeftPress => {
             MOUSE.press_left();
         }
-
         MessageData::LeftRelease => {
             MOUSE.release_left();
         }
-
         MessageData::Move { x, y } => {
             MOUSE.move_relative(x, y);
         }
-
         MessageData::Scroll { x, y } => {
             MOUSE.scroll(x, y);
         }
-
         MessageData::KeyboardPress { keycode } => {
             KEYBOARD.press(keycode);
         }
@@ -232,4 +248,8 @@ pub fn stop_server() {
     if let Some(cancel_token) = CANCEL_TOKEN.read().unwrap().as_ref() {
         cancel_token.cancel();
     }
+}
+
+pub fn is_server_running() -> bool {
+    SERVER_RUNNING.load(Ordering::SeqCst)
 }

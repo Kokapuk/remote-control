@@ -2,20 +2,16 @@ mod keyboard;
 mod mouse;
 mod server;
 
-use std::sync::{
-    OnceLock,
-    atomic::{AtomicBool, Ordering},
-};
-use tauri::menu::{IconMenuItemBuilder, MenuItemBuilder};
+use crate::server::ServerEvent;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{
-    App, AppHandle, Manager, RunEvent, WebviewWindow, WebviewWindowBuilder,
+    App, AppHandle, Emitter, Manager, RunEvent, WebviewWindow, WebviewWindowBuilder,
     image::Image,
-    menu::MenuBuilder,
+    menu::{IconMenuItemBuilder, MenuBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
 use tauri_plugin_notification::NotificationExt;
 
-pub static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 static ALLOW_EXIT: AtomicBool = AtomicBool::new(false);
 
 #[tauri::command]
@@ -26,6 +22,11 @@ async fn start_server(port: u16, allow_multiple_connections: bool) {
 #[tauri::command]
 fn stop_server() {
     server::stop_server();
+}
+
+#[tauri::command]
+fn is_server_running() -> bool {
+    server::is_server_running()
 }
 
 fn create_main_window(app: &AppHandle) -> WebviewWindow {
@@ -93,15 +94,33 @@ fn initialize_tray(app: &App) {
         .unwrap();
 }
 
+fn setup_server_events(app: &AppHandle) {
+    {
+        let app = app.clone();
+        server::add_event_listener(ServerEvent::Start, move || {
+            app.emit("server-start", ()).unwrap()
+        });
+    }
+    {
+        let app = app.clone();
+        server::add_event_listener(ServerEvent::Stop, move || {
+            app.emit("server-stop", ()).unwrap()
+        });
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![start_server, stop_server])
+        .invoke_handler(tauri::generate_handler![
+            start_server,
+            stop_server,
+            is_server_running
+        ])
         .setup(|app| {
-            APP_HANDLE.set(app.handle().clone()).unwrap();
-
             initialize_tray(app);
+            setup_server_events(app.app_handle());
 
             app.notification()
                 .builder()

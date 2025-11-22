@@ -10,6 +10,10 @@ export default function ServerForm() {
   const [allowMultipleConnections, setAllowMultipleConnections] = useState(false);
 
   useEffect(() => {
+    (async () => setServerRunning(await invoke('is_server_running')))();
+  }, []);
+
+  useEffect(() => {
     const options = JSON.parse(localStorage.getItem('savedOptions') ?? 'null');
 
     if (!options) {
@@ -34,8 +38,8 @@ export default function ServerForm() {
   };
 
   useEffect(() => {
-    const unlistenServerStarted = listen('server-started', () => setServerRunning(true));
-    const unlistenServerStopped = listen('server-stopped', () => setServerRunning(false));
+    const unlistenServerStarted = listen('server-start', () => setServerRunning(true));
+    const unlistenServerStopped = listen('server-stop', () => setServerRunning(false));
 
     return () => {
       unlistenServerStarted.then((f) => f());
