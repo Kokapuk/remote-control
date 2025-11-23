@@ -11,12 +11,21 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
 use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_store::StoreExt;
 
 static ALLOW_EXIT: AtomicBool = AtomicBool::new(false);
 
 #[tauri::command]
-async fn start_server(port: u16, allow_multiple_connections: bool) {
-    server::start_server(port, Some(allow_multiple_connections)).await;
+async fn start_server(app_handle: AppHandle) {
+    let store = app_handle.store("settings.json").unwrap();
+    let port = store.get("port").unwrap().as_u64().unwrap();
+    let allow_multiple_connections = store
+        .get("allow-multiple-connections")
+        .unwrap()
+        .as_bool()
+        .unwrap();
+
+    server::start_server(port as u16, Some(allow_multiple_connections)).await;
 }
 
 #[tauri::command]
@@ -27,6 +36,18 @@ fn stop_server() {
 #[tauri::command]
 fn is_server_running() -> bool {
     server::is_server_running()
+}
+
+fn fill_settings_defaults(app: &App) {
+    let store = app.store("settings.json").unwrap();
+
+    if !store.has("port") {
+        store.set("port", 8765);
+    }
+
+    if !store.has("allow-multiple-connections") {
+        store.set("allow-multiple-connections", false);
+    }
 }
 
 fn create_main_window(app: &AppHandle) -> WebviewWindow {
@@ -112,6 +133,7 @@ fn setup_server_events(app: &AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             start_server,
@@ -119,6 +141,7 @@ pub fn run() {
             is_server_running
         ])
         .setup(|app| {
+            fill_settings_defaults(app);
             initialize_tray(app);
             setup_server_events(app.app_handle());
 
@@ -128,6 +151,8 @@ pub fn run() {
                 .body("App is running in background")
                 .show()
                 .unwrap();
+
+            tauri::async_runtime::spawn(start_server(app.app_handle().clone()));
 
             Ok(())
         })

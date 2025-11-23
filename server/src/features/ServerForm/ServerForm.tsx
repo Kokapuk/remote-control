@@ -2,11 +2,12 @@ import { Switch } from '@/ui/switch';
 import { Button, Card, Field, NumberInput, Stack } from '@chakra-ui/react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { Store } from '@tauri-apps/plugin-store';
 import { FormEvent, useEffect, useState } from 'react';
 
 export default function ServerForm() {
   const [isServerRunning, setServerRunning] = useState(false);
-  const [port, setPort] = useState(8765);
+  const [port, setPort] = useState(0);
   const [allowMultipleConnections, setAllowMultipleConnections] = useState(false);
 
   useEffect(() => {
@@ -14,14 +15,14 @@ export default function ServerForm() {
   }, []);
 
   useEffect(() => {
-    const options = JSON.parse(localStorage.getItem('savedOptions') ?? 'null');
+    (async () => {
+      const store = await Store.load('settings.json');
+      const port = await store.get<number>('port');
+      const allowMultipleConnections = await store.get<boolean>('allow-multiple-connections');
 
-    if (!options) {
-      return;
-    }
-
-    setPort(options.port);
-    setAllowMultipleConnections(options.allowMultipleConnections);
+      setPort(port!);
+      setAllowMultipleConnections(allowMultipleConnections!);
+    })();
   }, []);
 
   const toggleServerRunning = async (event: FormEvent<HTMLFormElement>) => {
@@ -30,20 +31,23 @@ export default function ServerForm() {
     if (isServerRunning) {
       await invoke('stop_server');
     } else {
+      const store = await Store.load('settings.json', { defaults: {}, autoSave: false });
+      await store.set('port', port);
+      await store.set('allow-multiple-connections', allowMultipleConnections);
+      await store.save();
+
       const options = { port, allowMultipleConnections };
       await invoke('start_server', options);
-
-      localStorage.setItem('savedOptions', JSON.stringify(options));
     }
   };
 
   useEffect(() => {
-    const unlistenServerStarted = listen('server-start', () => setServerRunning(true));
-    const unlistenServerStopped = listen('server-stop', () => setServerRunning(false));
+    const unlistenServerStart = listen('server-start', () => setServerRunning(true));
+    const unlistenServerStop = listen('server-stop', () => setServerRunning(false));
 
     return () => {
-      unlistenServerStarted.then((f) => f());
-      unlistenServerStopped.then((f) => f());
+      unlistenServerStart.then((f) => f());
+      unlistenServerStop.then((f) => f());
     };
   }, []);
 

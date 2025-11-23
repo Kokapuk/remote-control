@@ -28,4 +28,5 @@ tokio-util = "0.7"
 windows = { version = "0.62", features = ["Win32_UI_Input_KeyboardAndMouse"] }
 gethostname = "1.1.0"
 tauri-plugin-notification = "2"
+tauri-plugin-store = "2"
 
