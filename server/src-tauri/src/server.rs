@@ -3,8 +3,8 @@ use crate::mouse::{BaseMouse, Mouse, WindowsMouse};
 use futures::{SinkExt, StreamExt};
 use gethostname::gethostname;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::panic;
+use std::sync::atomic::AtomicUsize;
 use std::sync::{
     LazyLock, RwLock,
     atomic::{AtomicBool, Ordering},
@@ -47,14 +47,18 @@ pub enum MessageData {
     KeyboardPress { keycode: u8 },
 }
 
-#[derive(Eq, PartialEq, Hash)]
 pub enum ServerEvent {
     Start,
     Stop,
+    Log { message: String },
 }
 
-static EVENT_LISTENERS: RwLock<Option<HashMap<ServerEvent, Vec<Box<dyn Fn() + Send + Sync>>>>> =
-    RwLock::new(None);
+type EventCallback = Box<dyn Fn(&ServerEvent) + Send + Sync>;
+type EventListener = (usize, EventCallback);
+
+static LISTENER_ID: AtomicUsize = AtomicUsize::new(0);
+static EVENT_LISTENERS: LazyLock<RwLock<Vec<EventListener>>> =
+    LazyLock::new(|| RwLock::new(Vec::new()));
 static SERVER_RUNNING: AtomicBool = AtomicBool::new(false);
 static CANCEL_TOKEN: RwLock<Option<CancellationToken>> = RwLock::new(None);
 static ALLOW_MULTIPLE_CONNECTIONS: AtomicBool = AtomicBool::new(false);
@@ -62,25 +66,23 @@ static CLIENT_CONNECTED: AtomicBool = AtomicBool::new(false);
 static MOUSE: LazyLock<Mouse> = LazyLock::new(|| Mouse::new(Box::new(WindowsMouse)));
 static KEYBOARD: LazyLock<Keyboard> = LazyLock::new(|| Keyboard::new(Box::new(WindowsKeyboard)));
 
-pub fn add_event_listener<F>(event: ServerEvent, listener: F)
-where
-    F: Fn() + Send + Sync + 'static,
-{
-    let mut guard = EVENT_LISTENERS.write().unwrap();
+pub fn add_event_listener(callback: EventCallback) -> usize {
+    let mut listeners = EVENT_LISTENERS.write().unwrap();
+    let id = LISTENER_ID.fetch_add(1, Ordering::SeqCst);
 
-    if guard.is_none() {
-        *guard = Some(HashMap::new());
-    }
+    listeners.push((id, callback));
 
-    let map = guard.as_mut().unwrap();
-    map.entry(event).or_default().push(Box::new(listener));
+    id
+}
+
+pub fn _remove_event_listener(remove_id: usize) {
+    let mut listeners = EVENT_LISTENERS.write().unwrap();
+    listeners.retain(|(id, _)| *id != remove_id);
 }
 
 fn emit_event(event: ServerEvent) {
-    let guard = EVENT_LISTENERS.read().unwrap();
-    let map = guard.as_ref().unwrap();
-
-    map.get(&event).unwrap().iter().for_each(|f| f());
+    let listeners = EVENT_LISTENERS.read().unwrap();
+    listeners.iter().for_each(|(_, f)| f(&event));
 }
 
 pub async fn start_server(port: u16, allow_multiple_connections: Option<bool>) {
@@ -99,8 +101,9 @@ pub async fn start_server(port: u16, allow_multiple_connections: Option<bool>) {
     tauri::async_runtime::spawn(handle_server_running(listener));
     SERVER_RUNNING.store(true, Ordering::SeqCst);
     emit_event(ServerEvent::Start);
-
-    println!("Server started");
+    emit_event(ServerEvent::Log {
+        message: "Server started".to_string(),
+    });
 }
 
 async fn handle_server_running(listener: TcpListener) {
@@ -114,7 +117,7 @@ async fn handle_server_running(listener: TcpListener) {
                         tauri::async_runtime::spawn(handle_new_connection(stream));
                     }
                     Err(e) => {
-                        println!("Accept error: {}", e);
+                        emit_event(ServerEvent::Log { message: e.to_string() });
                     }
                 }
             }
@@ -127,8 +130,9 @@ async fn handle_server_running(listener: TcpListener) {
 
     SERVER_RUNNING.store(false, Ordering::SeqCst);
     emit_event(ServerEvent::Stop);
-
-    println!("Server stopped");
+    emit_event(ServerEvent::Log {
+        message: "Server stopped".to_string(),
+    });
 }
 
 async fn handle_new_connection(stream: TcpStream) {
@@ -144,77 +148,76 @@ async fn handle_new_connection(stream: TcpStream) {
             .unwrap();
         }
 
-        println!("Client rejected");
+        emit_event(ServerEvent::Log {
+            message: "Client rejected".to_string(),
+        });
 
         return;
     }
 
-    handle_connection(stream).await;
+    match handle_connection(stream).await {
+        Err(message) => emit_event(ServerEvent::Log { message }),
+        _ => {}
+    }
 }
 
-async fn handle_connection(stream: TcpStream) {
+async fn handle_connection(stream: TcpStream) -> Result<(), String> {
     let ws_stream = match accept_async(stream).await {
-        Ok(ws) => ws,
-        Err(e) => {
-            println!("Handshake error: {}", e);
-
-            CLIENT_CONNECTED.store(false, Ordering::SeqCst);
-            return;
-        }
+        Ok(res) => res,
+        Err(e) => return Err(e.to_string()),
     };
 
     let (mut sender, mut receiver) = ws_stream.split();
 
-    sender
+    match sender
         .send(Message::Text(gethostname().into_string().unwrap().into()))
         .await
-        .expect("Handshake failed");
+    {
+        Err(e) => return Err(e.to_string()),
+        _ => {}
+    }
 
-    println!("Client connected");
+    emit_event(ServerEvent::Log {
+        message: "Client connected".to_string(),
+    });
 
     let cancel_token = CANCEL_TOKEN.read().unwrap().clone().unwrap();
 
-    let disconnected_with_error = loop {
+    let disconnection_error = loop {
         tokio::select! {
             msg = receiver.next() => {
                 match msg {
                     Some(Ok(Message::Text(content))) => {
-                        let result = panic::catch_unwind(|| handle_message(content));
-
-                        if result.is_err() {
-                            break true;
-                        }
+                        match handle_message(content) {
+                          Err(message) => break Err(message),
+                          _ => {}
+                        };
                     }
                     Some(Ok(Message::Close(_))) => {
-                        break false;
+                        break Ok(());
                     }
                     Some(Ok(_)) => {},
                     Some(Err(e)) => {
-                        println!("Error: {}", e);
-                        break true;
+                        break Err(e.to_string());
                     }
-                    None => break false,
+                    None => break Ok(()),
                 }
             }
 
-            _ = cancel_token.cancelled() => break false,
+            _ = cancel_token.cancelled() => break Ok(()),
         }
     };
 
     CLIENT_CONNECTED.store(false, Ordering::SeqCst);
 
-    println!(
-        "Client disconnected{}",
-        if disconnected_with_error {
-            " with error"
-        } else {
-            ""
-        }
-    );
+    disconnection_error
 }
 
-fn handle_message(content: Utf8Bytes) {
-    let data: MessageData = serde_json::from_str(&content).unwrap();
+fn handle_message(content: Utf8Bytes) -> Result<(), String> {
+    let data = match serde_json::from_str::<MessageData>(&content) {
+        Ok(result) => result,
+        Err(e) => return Err(e.to_string()),
+    };
 
     match data {
         MessageData::LeftClick => {
@@ -242,6 +245,8 @@ fn handle_message(content: Utf8Bytes) {
             KEYBOARD.press(keycode);
         }
     }
+
+    Ok(())
 }
 
 pub fn stop_server() {

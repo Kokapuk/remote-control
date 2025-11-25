@@ -3,9 +3,12 @@ import { Button, Card, Field, NumberInput, Stack } from '@chakra-ui/react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { Store } from '@tauri-apps/plugin-store';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, RefAttributes, useEffect, useState } from 'react';
+import LogPanel from './LogPanel';
 
-export default function ServerForm() {
+export type ServerFormProps = Card.RootProps & RefAttributes<HTMLFormElement>;
+
+export default function ServerForm(props: ServerFormProps) {
   const [isServerRunning, setServerRunning] = useState(false);
   const [port, setPort] = useState(0);
   const [allowMultipleConnections, setAllowMultipleConnections] = useState(false);
@@ -52,7 +55,7 @@ export default function ServerForm() {
   }, []);
 
   return (
-    <Card.Root as="form" onSubmit={toggleServerRunning as any} width="sm" marginInline="auto" marginTop="16">
+    <Card.Root as="form" onSubmit={toggleServerRunning as any} {...(props as any)}>
       <Card.Header>
         <Card.Title>Server</Card.Title>
       </Card.Header>
@@ -89,10 +92,12 @@ export default function ServerForm() {
         </Stack>
       </Card.Body>
 
-      <Card.Footer justifyContent="flex-end">
-        <Button type="submit" colorPalette={isServerRunning ? 'red' : undefined}>
+      <Card.Footer flexDirection="column" minHeight="0">
+        <Button type="submit" colorPalette={isServerRunning ? 'red' : undefined} alignSelf="flex-end">
           {isServerRunning ? 'Stop' : 'Start'}
         </Button>
+
+        <LogPanel alignSelf="flex-start" width="100%" />
       </Card.Footer>
     </Card.Root>
   );

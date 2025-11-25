@@ -3,7 +3,13 @@ mod mouse;
 mod server;
 
 use crate::server::ServerEvent;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::{
+    collections::VecDeque,
+    sync::{
+        LazyLock, RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 use tauri::{
     App, AppHandle, Emitter, Manager, RunEvent, WebviewWindow, WebviewWindowBuilder,
     image::Image,
@@ -14,6 +20,8 @@ use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_store::StoreExt;
 
 static ALLOW_EXIT: AtomicBool = AtomicBool::new(false);
+const MAX_LOGS: usize = 256;
+static LOGS: LazyLock<RwLock<VecDeque<String>>> = LazyLock::new(|| RwLock::new(VecDeque::new()));
 
 #[tauri::command]
 async fn start_server(app_handle: AppHandle) {
@@ -36,6 +44,11 @@ fn stop_server() {
 #[tauri::command]
 fn is_server_running() -> bool {
     server::is_server_running()
+}
+
+#[tauri::command]
+fn get_logs() -> VecDeque<String> {
+    LOGS.read().unwrap().clone()
 }
 
 fn fill_settings_defaults(app: &App) {
@@ -116,18 +129,25 @@ fn initialize_tray(app: &App) {
 }
 
 fn setup_server_events(app: &AppHandle) {
-    {
-        let app = app.clone();
-        server::add_event_listener(ServerEvent::Start, move || {
-            app.emit("server-start", ()).unwrap()
-        });
-    }
-    {
-        let app = app.clone();
-        server::add_event_listener(ServerEvent::Stop, move || {
-            app.emit("server-stop", ()).unwrap()
-        });
-    }
+    let app = app.clone();
+    let callback = Box::new(move |event: &ServerEvent| match event {
+        ServerEvent::Start => app.emit("server-start", ()).unwrap(),
+        ServerEvent::Stop => app.emit("server-stop", ()).unwrap(),
+        ServerEvent::Log { message } => {
+            let mut logs = LOGS.write().unwrap();
+
+            if logs.len() >= MAX_LOGS {
+                logs.pop_front();
+            }
+
+            logs.push_back(message.clone());
+
+            app.emit("log", message).unwrap();
+            println!("{message}");
+        }
+    });
+
+    server::add_event_listener(callback);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -138,7 +158,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             start_server,
             stop_server,
-            is_server_running
+            is_server_running,
+            get_logs
         ])
         .setup(|app| {
             fill_settings_defaults(app);

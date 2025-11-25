@@ -8,7 +8,9 @@ export default function BaseLayout({ children, ...props }: BaseLayoutProps) {
   return (
     <Stack height="100vh" {...props}>
       <Titlebar flexShrink="0" />
-      <Box height="100%">{children}</Box>
+      <Box height="100%" minHeight="0">
+        {children}
+      </Box>
     </Stack>
   );
 }
