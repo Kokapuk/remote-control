@@ -28,7 +28,11 @@ export default function LogPanel(props: LogPanelProps) {
 
   return (
     <Collapsible.Root unmountOnExit display="flex" flexDirection="column" minHeight="0" {...props}>
-      <Collapsible.Trigger asChild>
+      <Collapsible.Trigger
+        asChild
+        _open={{ marginBottom: '2' }}
+        transitionProperty="background-color,border-color,color,fill,stroke,opacity,box-shadow,translate,transform, margin"
+      >
         <Button size="sm" variant="ghost" width="fit-content">
           <Collapsible.Indicator transition="transform 0.2s" _open={{ transform: 'rotate(90deg)' }}>
             <FaChevronRight />
@@ -38,7 +42,15 @@ export default function LogPanel(props: LogPanelProps) {
       </Collapsible.Trigger>
 
       <Collapsible.Content display="flex">
-        <Stack borderWidth="1px" overflow="auto" gap="1" width="100%" direction="column-reverse">
+        <Stack
+          borderWidth="1px"
+          borderRadius="sm"
+          overflow="auto"
+          gap="1"
+          padding="1"
+          width="100%"
+          direction="column-reverse"
+        >
           {logs.map((log, index) => (
             <Text key={index} fontSize="sm" _even={{ backgroundColor: 'bg.muted' }}>
               {log}

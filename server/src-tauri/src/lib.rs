@@ -85,7 +85,7 @@ fn show_main_window(app: &AppHandle) {
 fn initialize_tray(app: &App) {
     let title_menu_item = IconMenuItemBuilder::new("Remote Control")
         .id("title")
-        .icon(Image::from_bytes(include_bytes!("../icons/tray.png")).unwrap())
+        .icon(Image::from_bytes(include_bytes!("../icons/Monochrome.png")).unwrap())
         .enabled(false)
         .build(app)
         .unwrap();
@@ -99,8 +99,8 @@ fn initialize_tray(app: &App) {
         .build()
         .unwrap();
 
-    TrayIconBuilder::new()
-        .icon(Image::from_bytes(include_bytes!("../icons/tray.png")).unwrap())
+    let tray_icon = TrayIconBuilder::new()
+        .icon(Image::from_bytes(include_bytes!("../icons/TrayInactive.png")).unwrap())
         .tooltip("Remote Control")
         .on_tray_icon_event(|tray, event| match event {
             TrayIconEvent::Click {
@@ -126,11 +126,27 @@ fn initialize_tray(app: &App) {
         })
         .build(app)
         .unwrap();
+
+    let server_event_callback = move |event: &ServerEvent| match event {
+        ServerEvent::Start => {
+            tray_icon
+                .set_icon(Image::from_bytes(include_bytes!("../icons/TrayActive.png")).ok())
+                .unwrap();
+        }
+        ServerEvent::Stop => {
+            tray_icon
+                .set_icon(Image::from_bytes(include_bytes!("../icons/TrayInactive.png")).ok())
+                .unwrap();
+        }
+        _ => {}
+    };
+
+    server::add_event_listener(Box::new(server_event_callback));
 }
 
 fn setup_server_events(app: &AppHandle) {
     let app = app.clone();
-    let callback = Box::new(move |event: &ServerEvent| match event {
+    let callback = move |event: &ServerEvent| match event {
         ServerEvent::Start => app.emit("server-start", ()).unwrap(),
         ServerEvent::Stop => app.emit("server-stop", ()).unwrap(),
         ServerEvent::Log { message } => {
@@ -145,16 +161,18 @@ fn setup_server_events(app: &AppHandle) {
             app.emit("log", message).unwrap();
             println!("{message}");
         }
-    });
+    };
 
-    server::add_event_listener(callback);
+    server::add_event_listener(Box::new(callback));
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_prevent_default::debug())
         .invoke_handler(tauri::generate_handler![
             start_server,
             stop_server,

@@ -86,9 +86,15 @@ fn emit_event(event: ServerEvent) {
 }
 
 pub async fn start_server(port: u16, allow_multiple_connections: Option<bool>) {
-    let listener = TcpListener::bind(format!("0.0.0.0:{port}"))
-        .await
-        .expect("Failed to bind");
+    let listener = match TcpListener::bind(format!("0.0.0.0:{port}")).await {
+        Ok(listener) => listener,
+        Err(e) => {
+            emit_event(ServerEvent::Log {
+                message: e.to_string(),
+            });
+            return;
+        }
+    };
 
     let mut cancel_token = CANCEL_TOKEN.write().unwrap();
     *cancel_token = Some(CancellationToken::new());
