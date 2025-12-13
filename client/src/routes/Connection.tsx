@@ -9,7 +9,7 @@ export default function Connection() {
 
   useEffect(() => {
     if (socket) {
-      navigate('/controls');
+      navigate('/controls', { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket]);

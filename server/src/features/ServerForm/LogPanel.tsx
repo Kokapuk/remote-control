@@ -11,7 +11,7 @@ export default function LogPanel(props: LogPanelProps) {
 
   useEffect(() => {
     (async () => {
-      const logs: string[] = await invoke('get_logs');
+      const logs = await invoke<string[]>('get_logs');
       setLogs(logs.reverse());
     })();
   }, []);

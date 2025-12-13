@@ -19,6 +19,10 @@ export default function Hotbar() {
     socket?.send(JSON.stringify({ type: 'keyboardPress', keycode: VIRTUAL_KEYCODES[constant].value }));
   };
 
+  if (!hotbarKeycodes.length) {
+    return null;
+  }
+
   return (
     <>
       {!isOpen && (

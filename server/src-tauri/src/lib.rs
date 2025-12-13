@@ -6,16 +6,17 @@ use crate::server::ServerEvent;
 use std::{
     collections::VecDeque,
     sync::{
-        LazyLock, RwLock,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, Ordering}, LazyLock,
+        RwLock,
     },
 };
 use tauri::{
-    App, AppHandle, Emitter, Manager, RunEvent, WebviewWindow, WebviewWindowBuilder,
-    image::Image,
-    menu::{IconMenuItemBuilder, MenuBuilder},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    image::Image, menu::{IconMenuItemBuilder, MenuBuilder, MenuItemBuilder}, tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}, App, AppHandle, Emitter, Manager,
+    RunEvent,
+    WebviewWindow,
+    WebviewWindowBuilder,
 };
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_store::StoreExt;
 
@@ -90,10 +91,16 @@ fn initialize_tray(app: &App) {
         .build(app)
         .unwrap();
 
+    let toggle_server_menu_item = MenuItemBuilder::new("Start Server")
+        .id("toggle-server")
+        .build(app)
+        .unwrap();
+
     let menu = MenuBuilder::new(app)
         .item(&title_menu_item)
         .separator()
         .text("show", "Show")
+        .item(&toggle_server_menu_item)
         .separator()
         .text("quit", "Quit")
         .build()
@@ -118,6 +125,13 @@ fn initialize_tray(app: &App) {
             "show" => {
                 show_main_window(&app);
             }
+            "toggle-server" => {
+                if is_server_running() {
+                    stop_server();
+                } else {
+                    tauri::async_runtime::spawn(start_server(app.clone()));
+                }
+            }
             "quit" => {
                 ALLOW_EXIT.store(true, Ordering::SeqCst);
                 app.exit(0);
@@ -132,11 +146,15 @@ fn initialize_tray(app: &App) {
             tray_icon
                 .set_icon(Image::from_bytes(include_bytes!("../icons/TrayActive.png")).ok())
                 .unwrap();
+
+            toggle_server_menu_item.set_text("Stop Server").unwrap();
         }
         ServerEvent::Stop => {
             tray_icon
                 .set_icon(Image::from_bytes(include_bytes!("../icons/TrayInactive.png")).ok())
                 .unwrap();
+
+            toggle_server_menu_item.set_text("Start Server").unwrap();
         }
         _ => {}
     };
@@ -144,32 +162,47 @@ fn initialize_tray(app: &App) {
     server::add_event_listener(Box::new(server_event_callback));
 }
 
+fn log(app: &AppHandle, message: &String) {
+    let mut logs = LOGS.write().unwrap();
+
+    if logs.len() >= MAX_LOGS {
+        logs.pop_front();
+    }
+
+    logs.push_back(message.clone());
+
+    app.emit("log", message).unwrap();
+    println!("{message}");
+}
+
 fn setup_server_events(app: &AppHandle) {
     let app = app.clone();
     let callback = move |event: &ServerEvent| match event {
         ServerEvent::Start => app.emit("server-start", ()).unwrap(),
         ServerEvent::Stop => app.emit("server-stop", ()).unwrap(),
-        ServerEvent::Log { message } => {
-            let mut logs = LOGS.write().unwrap();
-
-            if logs.len() >= MAX_LOGS {
-                logs.pop_front();
-            }
-
-            logs.push_back(message.clone());
-
-            app.emit("log", message).unwrap();
-            println!("{message}");
-        }
+        ServerEvent::Log { message } => log(&app, message),
     };
 
     server::add_event_listener(Box::new(callback));
+}
+
+fn enable_autostart(app: &AppHandle) {
+    if cfg!(dev) {
+        log(&app, &"Skipped enabling autostart".to_string());
+        return;
+    }
+
+    match app.autolaunch().enable() {
+        Ok(_) => log(&app, &"Enabled autostart".to_string()),
+        Err(e) => log(&app, &e.to_string()),
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
+        .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_prevent_default::debug())
@@ -192,6 +225,7 @@ pub fn run() {
                 .unwrap();
 
             tauri::async_runtime::spawn(start_server(app.app_handle().clone()));
+            enable_autostart(app.app_handle());
 
             Ok(())
         })

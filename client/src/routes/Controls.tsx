@@ -15,7 +15,7 @@ export default function Controls() {
 
   useEffect(() => {
     if (!socket) {
-      navigate('/');
+      navigate('/', { replace: true });
       return;
     }
 

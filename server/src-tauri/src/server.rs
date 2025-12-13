@@ -216,6 +216,10 @@ async fn handle_connection(stream: TcpStream) -> Result<(), String> {
 
     CLIENT_CONNECTED.store(false, Ordering::SeqCst);
 
+    emit_event(ServerEvent::Log {
+        message: "Client disconnected".to_string(),
+    });
+
     disconnection_error
 }
 
