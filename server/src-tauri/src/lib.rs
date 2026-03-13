@@ -1,20 +1,21 @@
 mod keyboard;
 mod mouse;
+mod remote_frontend;
 mod server;
 
 use crate::server::ServerEvent;
 use std::{
     collections::VecDeque,
     sync::{
-        atomic::{AtomicBool, Ordering}, LazyLock,
-        RwLock,
+        LazyLock, RwLock,
+        atomic::{AtomicBool, Ordering},
     },
 };
 use tauri::{
-    image::Image, menu::{IconMenuItemBuilder, MenuBuilder, MenuItemBuilder}, tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}, App, AppHandle, Emitter, Manager,
-    RunEvent,
-    WebviewWindow,
-    WebviewWindowBuilder,
+    App, AppHandle, Emitter, Manager, RunEvent, WebviewWindow, WebviewWindowBuilder,
+    image::Image,
+    menu::{IconMenuItemBuilder, MenuBuilder, MenuItemBuilder},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_notification::NotificationExt;
@@ -226,6 +227,8 @@ pub fn run() {
 
             tauri::async_runtime::spawn(start_server(app.app_handle().clone()));
             enable_autostart(app.app_handle());
+
+            tauri::async_runtime::spawn(remote_frontend::start_server(app.app_handle().clone()));
 
             Ok(())
         })
