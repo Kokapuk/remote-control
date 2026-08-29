@@ -11,10 +11,12 @@ export type ServerFormProps = Card.RootProps & RefAttributes<HTMLFormElement>;
 export default function ServerForm(props: ServerFormProps) {
   const [isServerRunning, setServerRunning] = useState(false);
   const [port, setPort] = useState(0);
+  const [localIp, setLocalIp] = useState<string | null>(null);
   const [allowMultipleConnections, setAllowMultipleConnections] = useState(false);
 
   useEffect(() => {
     (async () => setServerRunning(await invoke('is_server_running')))();
+    invoke<string>('get_local_ipv4').then(setLocalIp).catch(() => setLocalIp(null));
   }, []);
 
   useEffect(() => {
@@ -66,7 +68,7 @@ export default function ServerForm(props: ServerFormProps) {
             port={port}
           />
           <Separator display={{ base: 'none', md: 'block' }} orientation="vertical" />
-          <ConnectionPanel />
+          <ConnectionPanel ip={localIp} port={port} />
         </Grid>
       </Card.Body>
     </Card.Root>

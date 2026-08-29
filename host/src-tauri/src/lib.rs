@@ -1,6 +1,6 @@
 mod keyboard;
 mod mouse;
-mod remote_frontend;
+mod network;
 mod server;
 
 use crate::server::ServerEvent;
@@ -51,6 +51,13 @@ fn is_server_running() -> bool {
 #[tauri::command]
 fn get_logs() -> VecDeque<String> {
     LOGS.read().unwrap().clone()
+}
+
+#[tauri::command]
+fn get_local_ipv4() -> Result<String, String> {
+    network::local_ipv4()
+        .map(|address| address.to_string())
+        .map_err(|error| error.to_string())
 }
 
 fn fill_settings_defaults(app: &App) {
@@ -213,7 +220,8 @@ pub fn run() {
             start_server,
             stop_server,
             is_server_running,
-            get_logs
+            get_logs,
+            get_local_ipv4
         ])
         .setup(|app| {
             fill_settings_defaults(app);
@@ -229,8 +237,6 @@ pub fn run() {
 
             tauri::async_runtime::spawn(start_server(app.app_handle().clone()));
             enable_autostart(app.app_handle());
-
-            tauri::async_runtime::spawn(remote_frontend::start_server(app.app_handle().clone()));
 
             Ok(())
         })

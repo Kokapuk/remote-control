@@ -11,13 +11,16 @@ use std::sync::{
 };
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::{
-    accept_async,
+    WebSocketStream, accept_hdr_async,
     tungstenite::{
         Utf8Bytes,
+        handshake::server::{ErrorResponse, Request, Response},
+        http::{StatusCode, header::ORIGIN},
         protocol::{CloseFrame, Message, frame::coding::CloseCode},
     },
 };
 use tokio_util::sync::CancellationToken;
+use url::Url;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
@@ -65,6 +68,12 @@ static ALLOW_MULTIPLE_CONNECTIONS: AtomicBool = AtomicBool::new(false);
 static CLIENT_CONNECTED: AtomicBool = AtomicBool::new(false);
 static MOUSE: LazyLock<Mouse> = LazyLock::new(|| Mouse::new(Box::new(WindowsMouse)));
 static KEYBOARD: LazyLock<Keyboard> = LazyLock::new(|| Keyboard::new(Box::new(WindowsKeyboard)));
+static REMOTE_FRONTEND_ORIGIN: LazyLock<String> = LazyLock::new(|| {
+    Url::parse(env!("VITE_REMOTE_FRONTEND_URL"))
+        .expect("VITE_REMOTE_FRONTEND_URL must be a valid URL")
+        .origin()
+        .ascii_serialization()
+});
 
 pub fn add_event_listener(callback: EventCallback) -> usize {
     let mut listeners = EVENT_LISTENERS.write().unwrap();
@@ -142,36 +151,77 @@ async fn handle_server_running(listener: TcpListener) {
 }
 
 async fn handle_new_connection(stream: TcpStream) {
+    let mut ws = match accept_websocket(stream).await {
+        Ok(ws) => ws,
+        Err(message) => {
+            emit_event(ServerEvent::Log { message });
+            return;
+        }
+    };
+
     if !ALLOW_MULTIPLE_CONNECTIONS.load(Ordering::SeqCst)
         && CLIENT_CONNECTED.swap(true, Ordering::SeqCst)
     {
-        if let Ok(mut ws) = accept_async(stream).await {
-            ws.close(Some(CloseFrame {
+        let _ = ws
+            .close(Some(CloseFrame {
                 code: CloseCode::Error,
                 reason: "Server already has active connection".into(),
             }))
-            .await
-            .unwrap();
-        }
+            .await;
 
         emit_event(ServerEvent::Log {
-            message: "Client rejected".to_string(),
+            message: "Client rejected: server already has an active connection".to_string(),
         });
 
         return;
     }
 
-    match handle_connection(stream).await {
+    match handle_connection(ws).await {
         Err(message) => emit_event(ServerEvent::Log { message }),
         _ => {}
     }
 }
 
-async fn handle_connection(stream: TcpStream) -> Result<(), String> {
-    let ws_stream = match accept_async(stream).await {
-        Ok(res) => res,
-        Err(e) => return Err(e.to_string()),
-    };
+async fn accept_websocket(stream: TcpStream) -> Result<WebSocketStream<TcpStream>, String> {
+    accept_hdr_async(stream, |request: &Request, response: Response| {
+        let origin = request
+            .headers()
+            .get(ORIGIN)
+            .and_then(|value| value.to_str().ok());
+
+        if origin.is_some_and(is_origin_allowed) {
+            return Ok(response);
+        }
+
+        let origin = origin.unwrap_or("missing");
+        emit_event(ServerEvent::Log {
+            message: format!("Client rejected: origin {origin} is not allowed"),
+        });
+
+        let mut response = ErrorResponse::new(Some("Forbidden origin".to_string()));
+        *response.status_mut() = StatusCode::FORBIDDEN;
+        Err(response)
+    })
+    .await
+    .map_err(|error| error.to_string())
+}
+
+fn is_origin_allowed(origin: &str) -> bool {
+    origin == REMOTE_FRONTEND_ORIGIN.as_str()
+        || (cfg!(debug_assertions)
+            && matches!(origin, "http://localhost:5173" | "http://127.0.0.1:5173"))
+}
+
+async fn handle_connection(ws_stream: WebSocketStream<TcpStream>) -> Result<(), String> {
+    struct ConnectionGuard;
+
+    impl Drop for ConnectionGuard {
+        fn drop(&mut self) {
+            CLIENT_CONNECTED.store(false, Ordering::SeqCst);
+        }
+    }
+
+    let _connection_guard = ConnectionGuard;
 
     let (mut sender, mut receiver) = ws_stream.split();
 
@@ -213,8 +263,6 @@ async fn handle_connection(stream: TcpStream) -> Result<(), String> {
             _ = cancel_token.cancelled() => break Ok(()),
         }
     };
-
-    CLIENT_CONNECTED.store(false, Ordering::SeqCst);
 
     emit_event(ServerEvent::Log {
         message: "Client disconnected".to_string(),
@@ -267,4 +315,19 @@ pub fn stop_server() {
 
 pub fn is_server_running() -> bool {
     SERVER_RUNNING.load(Ordering::SeqCst)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{REMOTE_FRONTEND_ORIGIN, is_origin_allowed};
+
+    #[test]
+    fn allows_the_configured_remote_origin() {
+        assert!(is_origin_allowed(REMOTE_FRONTEND_ORIGIN.as_str()));
+    }
+
+    #[test]
+    fn rejects_an_unconfigured_origin() {
+        assert!(!is_origin_allowed("https://malicious.example"));
+    }
 }
