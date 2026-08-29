@@ -1,0 +1,86 @@
+import useSocketStore from '@/stores/socket';
+import { toaster } from '@/ui/toaster';
+import { Button, Card, Field, NumberInput, Stack } from '@chakra-ui/react';
+import { useState } from 'react';
+import { useShallow } from 'zustand/shallow';
+
+export default function ConnectionForm() {
+  const [connecting, setConnecting] = useState(false);
+  const { setSocket, setHostname } = useSocketStore(
+    useShallow((s) => ({ setSocket: s.setSocket, setHostname: s.setHostname })),
+  );
+  const savedPort = localStorage.getItem('savedPort') ?? undefined;
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    setConnecting(true);
+
+    const formdata = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const socket = new WebSocket(`ws://${location.hostname}:${formdata.port}`);
+
+    const cleanup = () => {
+      socket.removeEventListener('open', handleOpen);
+      socket.removeEventListener('error', handleError);
+      socket.removeEventListener('close', handleError);
+      socket.removeEventListener('message', handleMessage);
+    };
+
+    const handleMessage = (event: MessageEvent<string>) => {
+      setSocket(socket);
+      setHostname(event.data);
+      setConnecting(false);
+      cleanup();
+      toaster.success({ title: 'Connected' });
+    };
+
+    const handleOpen = () => {
+      localStorage.setItem('savedPort', formdata.port as string);
+    };
+
+    const handleError = (event: CloseEvent | Event) => {
+      toaster.error({ title: (event as CloseEvent).reason ?? 'Failed to connect' });
+      setConnecting(false);
+      cleanup();
+    };
+
+    socket.addEventListener('open', handleOpen);
+    socket.addEventListener('error', handleError);
+    socket.addEventListener('close', handleError);
+    socket.addEventListener('message', handleMessage);
+  };
+
+  return (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    <Card.Root as="form" maxW="sm" marginInline="auto" onSubmit={handleSubmit as any}>
+      <Card.Header>
+        <Card.Title>Connection</Card.Title>
+      </Card.Header>
+
+      <Card.Body>
+        <Stack gap="4">
+          <Field.Root>
+            <Field.Label>Port</Field.Label>
+            <NumberInput.Root
+              defaultValue={savedPort ?? '8765'}
+              name="port"
+              required
+              min={1}
+              max={65535}
+              width="100%"
+            >
+              <NumberInput.Control />
+              <NumberInput.Input />
+            </NumberInput.Root>
+          </Field.Root>
+        </Stack>
+      </Card.Body>
+
+      <Card.Footer justifyContent="flex-end">
+        <Button type="submit" loading={connecting}>
+          Connect
+        </Button>
+      </Card.Footer>
+    </Card.Root>
+  );
+}
